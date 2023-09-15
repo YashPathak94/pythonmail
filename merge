@@ -1,0 +1,107 @@
+import sys
+import argparse
+import base64
+import os
+from kubernetes import client, config
+from termcolor import colored
+from tabulate import tabulate
+from typing import List, ByteString
+from pepipost.pepipost_client import PepipostClient
+from pepipost.configuration import Configuration
+from pepipost.models.send import Send
+from pepipost.models.mfrom import From
+from pepipost.models.content import Content
+from pepipost.models.type_enum import TypeEnum
+from pepipost.models.attachments import Attachments
+from pepipost.models.personalizations import Personalizations
+from pepipost.models.email_struct import EmailStruct
+from pepipost.models.settings import Settings
+from pepipost.exceptions.api_exception import APIException
+
+# Existing code for generating the report
+def get_pod_data(api_instance, cluster_name):
+    # ... (Existing code for getting pod data)
+
+def main():
+    # ... (Existing code for main function)
+
+if __name__ == "__main__":
+    main()
+
+# Pepipost code for sending emails with attachments
+class Attachment(object):
+    def __init__(self,
+                 name: str = None,
+                 data: ByteString = None):
+        self.name = name
+        self.data = data
+
+class EmailDto(object):
+    # ... (Pepipost code for EmailDto class)
+
+def validate_mailing_list(cc, bcc, to):
+    # ... (Pepipost code for validate_mailing_list function)
+
+def get_personalization(dto):
+    # ... (Pepipost code for get_personalization function)
+
+def get_email_structs(emails: List[str]):
+    # ... (Pepipost code for get_email_structs function)
+
+def get_setting():
+    # ... (Pepipost code for get_setting function)
+
+def get_attachments(dto):
+    # ... (Pepipost code for get_attachments function)
+
+def create_email(dto: EmailDto):
+    # ... (Pepipost code for create_email function)
+
+def send_email(dto: EmailDto, api_key: str):
+    # ... (Pepipost code for send_email function)
+
+def test_send(api_key: str):
+    # ... (Pepipost code for test_send function)
+
+# Merged code for generating the report and sending it as an email attachment
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="script to send email")
+    parser.add_argument('-k', dest="api_key",
+                        default=None, help="api key for netcore")
+    api_key = parser.parse_args().api_key
+    try:
+        # Generate the report and save it as a CSV
+        config.load_kube_config()
+        api_instance = client.CoreV1Api()
+        cluster_name = "xyz"  # Set your cluster name here
+        pod_data = get_pod_data(api_instance, cluster_name)
+
+        # Convert the pod data to CSV and save it
+        csv_filename = "pod_data.csv"
+        with open(csv_filename, 'w') as csv_file:
+            for row in pod_data:
+                csv_file.write(','.join(map(str, row)) + '\n')
+
+        # Send the email with the CSV attachment using Pepipost
+        from_email = "your-email@example.com"  # Set your sender email here
+        from_name = "Your Name"
+        to = ["recipient@example.com"]  # Set the recipient's email here
+        reply_to = "no-reply@example.com"
+        subject = "Kubernetes Pod Report"
+        body = "Please find the attached Kubernetes Pod Report."
+
+        attachment = Attachment(name="pod_data.csv", data=open(csv_filename, 'rb').read())
+
+        email_dto = EmailDto(
+            from_email=from_email,
+            from_name=from_name,
+            to=to,
+            reply_to=reply_to,
+            subject=subject,
+            body=body,
+            attachments=[attachment])
+
+        result = send_email(email_dto, api_key)
+        print(result)
+    except Exception as e:
+        print(e)
