@@ -54,11 +54,11 @@ def get_nodes_and_metrics(cluster_name, aws_session):
         nodes.append({
             'name': node_name,
             'instance_type': instance_type,
-            'cpu_capacity': cpu_capacity,
-            'memory_capacity_gb': memory_capacity_gb,
-            'cpu_utilization': cpu_utilization,
-            'memory_utilization_gb': memory_utilization_gb,
-            'memory_utilization_percentage': memory_utilization_percentage
+            'cpu_capacity': int(cpu_capacity),
+            'memory_capacity_gb': f"{int(memory_capacity_gb)} GB",
+            'cpu_utilization': int(cpu_utilization.split('%')[0]),
+            'memory_utilization_gb': f"{memory_utilization_gb:.2f} GB",
+            'memory_utilization_percentage': f"{memory_utilization_percentage:.2f}"
         })
 
     return nodes
@@ -88,9 +88,13 @@ def generate_html_report(clusters_info):
             body { font-family: Arial, sans-serif; margin: 20px; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
             th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; }
+            th { background-color: #007BFF; color: white; }
             h2 { margin-top: 50px; }
             .download-link { margin-top: 20px; }
+            .gauge-container { width: 100px; height: 50px; background: #e6e6e6; border-radius: 5px; position: relative; }
+            .gauge-fill { height: 100%; border-radius: 5px; }
+            .gauge-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; }
+            .dropdown { margin-bottom: 10px; }
         </style>
     </head>
     <body>
@@ -108,7 +112,7 @@ def generate_html_report(clusters_info):
                     <th>Instance Type</th>
                     <th>CPU Capacity (vCPU)</th>
                     <th>Memory Capacity (GB)</th>
-                    <th>CPU Utilization</th>
+                    <th>CPU Utilization (%)</th>
                     <th>Memory Utilization (GB)</th>
                     <th>Memory Utilization (%)</th>
                 </tr>
@@ -120,16 +124,30 @@ def generate_html_report(clusters_info):
                     <td>{{ node.instance_type }}</td>
                     <td>{{ node.cpu_capacity }}</td>
                     <td>{{ node.memory_capacity_gb }}</td>
-                    <td>{{ node.cpu_utilization }}</td>
+                    <td>{{ node.cpu_utilization }}%</td>
                     <td>{{ node.memory_utilization_gb }}</td>
-                    <td>{{ node.memory_utilization_percentage }}</td>
+                    <td>
+                        <div class="gauge-container">
+                            <div class="gauge-fill" style="width: {{ node.memory_utilization_percentage }}%; background: {% if node.memory_utilization_percentage|float < 75 %}green{% else %}orange{% endif %};"></div>
+                            <div class="gauge-label">{{ node.memory_utilization_percentage }}%</div>
+                        </div>
+                    </td>
                 </tr>
             {% endfor %}
             </tbody>
         </table>
 
         <h3>Pods by Namespace</h3>
-        <table>
+        <div class="dropdown">
+            <label for="namespace-select">Select Namespace:</label>
+            <select id="namespace-select" onchange="filterTable(this.value, '{{ cluster.name }}')">
+                <option value="">Show All</option>
+                {% for namespace in cluster.pods %}
+                <option value="{{ namespace }}">{{ namespace }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <table id="pod-table-{{ cluster.name }}">
             <thead>
                 <tr>
                     <th>Namespace</th>
@@ -138,7 +156,7 @@ def generate_html_report(clusters_info):
             </thead>
             <tbody>
             {% for namespace, pod_count in cluster.pods.items() %}
-                <tr>
+                <tr class="namespace-row" data-namespace="{{ namespace }}">
                     <td>{{ namespace }}</td>
                     <td>{{ pod_count }}</td>
                 </tr>
@@ -146,7 +164,23 @@ def generate_html_report(clusters_info):
             </tbody>
         </table>
         {% endfor %}
+
         <a href="eks_report.html" download="eks_report.html" class="download-link">Download Report</a>
+
+        <script>
+            function filterTable(namespace, clusterName) {
+                var table = document.getElementById('pod-table-' + clusterName);
+                var rows = table.getElementsByClassName('namespace-row');
+                for (var i = 0; i < rows.length; i++) {
+                    var rowNamespace = rows[i].getAttribute('data-namespace');
+                    if (namespace === '' || namespace === rowNamespace) {
+                        rows[i].style.display = '';
+                    } else {
+                        rows[i].style.display = 'none';
+                    }
+                }
+            }
+        </script>
     </body>
     </html>
     """
@@ -169,7 +203,7 @@ def main():
     clusters_info = []
 
     for account in accounts:
-        session = get_aws_session(account['region'])
+        session = get_aws_session(account)
         clusters = get_clusters(session)
 
         for cluster in clusters:
