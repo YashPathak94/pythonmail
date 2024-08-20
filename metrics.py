@@ -42,7 +42,13 @@ def get_nodes_and_metrics(cluster_name, aws_session):
         
         # Get CPU utilization
         cpu_cmd = f"kubectl top node {node_name} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $2}}'"
-        cpu_utilization = subprocess.check_output(cpu_cmd, shell=True).decode('utf-8').strip()
+        cpu_utilization_raw = subprocess.check_output(cpu_cmd, shell=True).decode('utf-8').strip()
+
+        # Convert CPU utilization to cores
+        if cpu_utilization_raw.endswith('m'):
+            cpu_utilization = int(cpu_utilization_raw[:-1]) / 1000  # Convert millicores to cores
+        else:
+            cpu_utilization = int(cpu_utilization_raw)  # It's already in cores
 
         # Get memory utilization
         memory_cmd = f"kubectl top node {node_name} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $4}}'"
@@ -56,12 +62,13 @@ def get_nodes_and_metrics(cluster_name, aws_session):
             'instance_type': instance_type,
             'cpu_capacity': int(cpu_capacity),
             'memory_capacity_gb': f"{int(memory_capacity_gb)} GB",
-            'cpu_utilization': int(cpu_utilization.split('%')[0]),
+            'cpu_utilization': f"{cpu_utilization:.2f}",  # Format to two decimal places
             'memory_utilization_gb': f"{memory_utilization_gb:.2f} GB",
             'memory_utilization_percentage': f"{memory_utilization_percentage:.2f}"
         })
 
     return nodes
+
 
 def get_pods(cluster_name, aws_session):
     namespaces = {}
