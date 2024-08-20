@@ -85,35 +85,49 @@ def get_pods_and_metrics(cluster_name, aws_session):
         return pods
 
     for pod in pod_info:
-        namespace, pod_name, node_name = pod.split('|')
+        try:
+            namespace, pod_name, node_name = pod.split('|')
 
-        # Get CPU utilization for the pod
-        cpu_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $2}}'"
-        cpu_utilization_raw = subprocess.check_output(cpu_cmd, shell=True).decode('utf-8').strip()
+            # Get CPU utilization for the pod
+            cpu_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $2}}'"
+            cpu_utilization_raw = subprocess.check_output(cpu_cmd, shell=True).decode('utf-8').strip()
 
-        if cpu_utilization_raw.endswith('m'):
-            cpu_utilization = int(cpu_utilization_raw[:-1]) / 1000  # Convert millicores to cores
-        else:
-            cpu_utilization = int(cpu_utilization_raw)
+            if not cpu_utilization_raw:
+                print(f"Warning: No CPU utilization data for pod {pod_name} in namespace {namespace}. Skipping this pod.")
+                continue
 
-        # Get memory utilization for the pod
-        memory_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $3}}'"
-        memory_utilization = subprocess.check_output(memory_cmd, shell=True).decode('utf-8').strip()
-        memory_utilization_gb = int(memory_utilization[:-2]) / 1024  # Convert MiB to GB
+            if cpu_utilization_raw.endswith('m'):
+                cpu_utilization = int(cpu_utilization_raw[:-1]) / 1000  # Convert millicores to cores
+            else:
+                cpu_utilization = int(cpu_utilization_raw)
 
-        # Here we assume that pod's memory utilization is 100% of its capacity for simplicity
-        memory_utilization_percentage = 100.0
+            # Get memory utilization for the pod
+            memory_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $3}}'"
+            memory_utilization = subprocess.check_output(memory_cmd, shell=True).decode('utf-8').strip()
 
-        pods.append({
-            'namespace': namespace,
-            'name': pod_name,
-            'node_name': node_name,
-            'cpu_utilization': f"{cpu_utilization:.2f}",
-            'memory_utilization_gb': f"{memory_utilization_gb:.2f} GB",
-            'memory_utilization_percentage': f"{memory_utilization_percentage:.2f}"
-        })
+            if not memory_utilization:
+                print(f"Warning: No memory utilization data for pod {pod_name} in namespace {namespace}. Skipping this pod.")
+                continue
 
-    return pods
+            memory_utilization_gb = int(memory_utilization[:-2]) / 1024  # Convert MiB to GB
+
+            # Assume pod's memory utilization is 100% of its capacity for simplicity
+            memory_utilization_percentage = 100.0
+
+            pods.append({  
+                'namespace': namespace,
+                'name': pod_name,
+                'node_name': node_name,
+                'cpu_utilization': f"{cpu_utilization:.2f}",
+                'memory_utilization_gb': f"{memory_utilization_gb:.2f} GB",
+                'memory_utilization_percentage': f"{memory_utilization_percentage:.2f}"
+            })
+
+        except Exception as e:
+            print(f"Error processing pod {pod_name} in namespace {namespace}: {e}")
+            continue
+
+    return pods 
 
 def generate_html_report(clusters_info):
     template = """
