@@ -31,7 +31,7 @@ def get_clusters(aws_session):
 
 def get_nodes_and_metrics(cluster_name, aws_session):
     nodes = []
-    cmd = f"kubectl get nodes --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} -o jsonpath='{{range .items[*]}}{{.metadata.name}}|{{.metadata.labels.kubernetes\\.io/instance-type}}|{{.status.capacity.cpu}}|{{.status.capacity.memory}} {{end}}'"
+    cmd = f"kubectl get nodes --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} -o jsonpath='{{range .items[*]}}{{.metadata.name}}|{{.status.capacity.cpu}}|{{.status.capacity.memory}} {{end}}'"
     
     try:
         node_info = subprocess.check_output(cmd, shell=True).decode('utf-8').strip().split()
@@ -41,11 +41,11 @@ def get_nodes_and_metrics(cluster_name, aws_session):
 
     for node in node_info:
         node_details = node.split('|')
-        if len(node_details) != 4:
+        if len(node_details) != 3:
             print(f"Unexpected node data format: {node_details}")
             continue
 
-        node_name, instance_type, cpu_capacity, memory_capacity = node_details
+        node_name, cpu_capacity, memory_capacity = node_details
         memory_capacity_gb = int(memory_capacity[:-2]) / 1024  # Convert MiB to GB
 
         cpu_cmd = f"kubectl top node {node_name} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $2}}'"
@@ -64,7 +64,6 @@ def get_nodes_and_metrics(cluster_name, aws_session):
 
         nodes.append({
             'name': node_name,
-            'instance_type': instance_type,
             'cpu_capacity': int(cpu_capacity),
             'memory_capacity_gb': f"{int(memory_capacity_gb)} GB",
             'cpu_utilization': f"{cpu_utilization:.2f}",
@@ -76,7 +75,7 @@ def get_nodes_and_metrics(cluster_name, aws_session):
 
 def get_pods_and_metrics(cluster_name, aws_session):
     pods = []
-    cmd = f"kubectl get pods --all-namespaces --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} -o jsonpath='{{range .items[*]}}{{.metadata.namespace}}|{{.metadata.name}}|{{.spec.nodeName}} {{end}}'"
+    cmd = f"kubectl get pods --all-namespaces --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} -o jsonpath='{{range .items[*]}}{{.metadata.namespace}}|{{.metadata.name}}|{{.spec.nodeName}}|{{.spec.containers[*].resources.requests.memory}}|{{.spec.containers[*].resources.requests.cpu}} {{end}}'"
     
     try:
         pod_info = subprocess.check_output(cmd, shell=True).decode('utf-8').strip().split()
@@ -86,7 +85,7 @@ def get_pods_and_metrics(cluster_name, aws_session):
 
     for pod in pod_info:
         try:
-            namespace, pod_name, node_name = pod.split('|')
+            namespace, pod_name, node_name, memory_request, cpu_request = pod.split('|')
 
             # Get CPU utilization for the pod
             cpu_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $2}}'"
@@ -110,11 +109,15 @@ def get_pods_and_metrics(cluster_name, aws_session):
                 continue
 
             memory_utilization_gb = int(memory_utilization[:-2]) / 1024  # Convert MiB to GB
+            memory_request_gb = int(memory_request[:-2]) / 1024 if memory_request.endswith('Mi') else int(memory_request[:-2])
 
-            # Assume pod's memory utilization is 100% of its capacity for simplicity
-            memory_utilization_percentage = 100.0
+            # Calculate memory utilization percentage
+            if memory_request_gb > 0:
+                memory_utilization_percentage = (memory_utilization_gb / memory_request_gb) * 100
+            else:
+                memory_utilization_percentage = 0.0
 
-            pods.append({  
+            pods.append({
                 'namespace': namespace,
                 'name': pod_name,
                 'node_name': node_name,
@@ -127,7 +130,7 @@ def get_pods_and_metrics(cluster_name, aws_session):
             print(f"Error processing pod {pod_name} in namespace {namespace}: {e}")
             continue
 
-    return pods 
+    return pods
 
 def generate_html_report(clusters_info):
     template = """
@@ -164,7 +167,6 @@ def generate_html_report(clusters_info):
             <thead>
                 <tr>
                     <th>Node Name</th>
-                    <th>Instance Type</th>
                     <th>CPU Capacity (vCPU)</th>
                     <th>Memory Capacity (GB)</th>
                     <th>CPU Utilization (%)</th>
@@ -176,7 +178,6 @@ def generate_html_report(clusters_info):
             {% for node in cluster.nodes %}
                 <tr>
                     <td>{{ node.name }}</td>
-                    <td>{{ node.instance_type }}</td>
                     <td>{{ node.cpu_capacity }}</td>
                     <td>{{ node.memory_capacity_gb }}</td>
                     <td>{{ node.cpu_utilization }}%</td>
@@ -210,7 +211,6 @@ def generate_html_report(clusters_info):
                     <th>Node Name</th>
                     <th>CPU Utilization (vCPU)</th>
                     <th>Memory Utilization (GB)</th>
-                    <th>Memory Utilization (%)</th>
                 </tr>
             </thead>
             <tbody>
@@ -221,7 +221,6 @@ def generate_html_report(clusters_info):
                     <td>{{ pod.node_name }}</td>
                     <td>{{ pod.cpu_utilization }}</td>
                     <td>{{ pod.memory_utilization_gb }}</td>
-                    <td>{{ pod.memory_utilization_percentage }}%</td>
                 </tr>
             {% endfor %}
             </tbody>
@@ -243,28 +242,29 @@ def generate_html_report(clusters_info):
                     <th>Node Name</th>
                     <th>CPU Utilization (vCPU)</th>
                     <th>Memory Utilization (GB)</th>
-                    <th>Memory Utilization (%)</th>
                 </tr>
             </thead>
             <tbody>
-            {% set max_cpu_pod = max(cluster.pods_info, key=lambda x: x['cpu_utilization']) %}
-            {% set max_memory_pod = max(cluster.pods_info, key=lambda x: x['memory_utilization_percentage']) %}
+            {% set max_cpu_pods = cluster.pods_info | sort(attribute='cpu_utilization', reverse=True) %}
+            {% set max_memory_pods = cluster.pods_info | sort(attribute='memory_utilization_percentage', reverse=True) %}
+            {% for pod in max_cpu_pods %}
             <tr class="max-cpu-row">
-                <td>{{ max_cpu_pod.namespace }}</td>
-                <td>{{ max_cpu_pod.name }}</td>
-                <td>{{ max_cpu_pod.node_name }}</td>
-                <td>{{ max_cpu_pod.cpu_utilization }}</td>
-                <td>{{ max_cpu_pod.memory_utilization_gb }}</td>
-                <td>{{ max_cpu_pod.memory_utilization_percentage }}%</td>
+                <td>{{ pod.namespace }}</td>
+                <td>{{ pod.name }}</td>
+                <td>{{ pod.node_name }}</td>
+                <td>{{ pod.cpu_utilization }}</td>
+                <td>{{ pod.memory_utilization_gb }}</td>
             </tr>
+            {% endfor %}
+            {% for pod in max_memory_pods %}
             <tr class="max-memory-row">
-                <td>{{ max_memory_pod.namespace }}</td>
-                <td>{{ max_memory_pod.name }}</td>
-                <td>{{ max_memory_pod.node_name }}</td>
-                <td>{{ max_memory_pod.cpu_utilization }}</td>
-                <td>{{ max_memory_pod.memory_utilization_gb }}</td>
-                <td>{{ max_memory_pod.memory_utilization_percentage }}%</td>
+                <td>{{ pod.namespace }}</td>
+                <td>{{ pod.name }}</td>
+                <td>{{ pod.node_name }}</td>
+                <td>{{ pod.cpu_utilization }}</td>
+                <td>{{ pod.memory_utilization_gb }}</td>
             </tr>
+            {% endfor %}
             </tbody>
         </table>
         {% endfor %}
@@ -286,15 +286,15 @@ def generate_html_report(clusters_info):
             }
 
             function filterMaxUtilization(metric, clusterName) {
-                var maxCpuRow = document.querySelector('#max-utilization-table-' + clusterName + ' .max-cpu-row');
-                var maxMemoryRow = document.querySelector('#max-utilization-table-' + clusterName + ' .max-memory-row');
+                var maxCpuRows = document.querySelectorAll('#max-utilization-table-' + clusterName + ' .max-cpu-row');
+                var maxMemoryRows = document.querySelectorAll('#max-utilization-table-' + clusterName + ' .max-memory-row');
 
                 if (metric === 'cpu') {
-                    maxCpuRow.style.display = '';
-                    maxMemoryRow.style.display = 'none';
+                    maxCpuRows.forEach(row => row.style.display = '');
+                    maxMemoryRows.forEach(row => row.style.display = 'none');
                 } else if (metric === 'memory') {
-                    maxCpuRow.style.display = 'none';
-                    maxMemoryRow.style.display = '';
+                    maxCpuRows.forEach(row => row.style.display = 'none');
+                    maxMemoryRows.forEach(row => row.style.display = '');
                 }
             }
         </script>
@@ -340,3 +340,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    
