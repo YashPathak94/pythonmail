@@ -75,6 +75,7 @@ def get_nodes_and_metrics(cluster_name, aws_session):
 
 def get_pods_and_metrics(cluster_name, aws_session):
     pods = []
+    namespace_counts = {}
     cmd = f"kubectl get pods --all-namespaces --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} -o jsonpath='{{range .items[*]}}{{.metadata.namespace}}|{{.metadata.name}}|{{.spec.nodeName}}|{{.spec.containers[*].resources.requests.memory}}|{{.spec.containers[*].resources.requests.cpu}} {{end}}'"
     
     try:
@@ -86,6 +87,11 @@ def get_pods_and_metrics(cluster_name, aws_session):
     for pod in pod_info:
         try:
             namespace, pod_name, node_name, memory_request, cpu_request = pod.split('|')
+
+            # Increment the namespace count
+            if namespace not in namespace_counts:
+                namespace_counts[namespace] = 0
+            namespace_counts[namespace] += 1
 
             # Get CPU utilization for the pod
             cpu_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $2}}'"
@@ -130,7 +136,7 @@ def get_pods_and_metrics(cluster_name, aws_session):
             print(f"Error processing pod {pod_name} in namespace {namespace}: {e}")
             continue
 
-    return pods
+    return pods, namespace_counts
 
 def generate_html_report(clusters_info):
     template = """
@@ -196,10 +202,10 @@ def generate_html_report(clusters_info):
         <h3>Pods Information by Namespace</h3>
         <div class="dropdown">
             <label for="namespace-select-{{ cluster.name }}">Select Namespace:</label>
-            <select id="namespace-select-{{ cluster.name }}" onchange="filterPods(this.value, '{{ cluster.name }}')">
+            <select id="namespace-select-{{ cluster.name }}" onchange="filterPods(this.value, '{{ cluster.name }}', {{ cluster.namespace_counts }})">
                 <option value="">Show All</option>
                 {% for namespace in cluster.pods %}
-                <option value="{{ namespace }}">{{ namespace }}</option>
+                <option value="{{ namespace }}">{{ namespace }} ({{ cluster.namespace_counts[namespace] }} Pods)</option>
                 {% endfor %}
             </select>
         </div>
@@ -272,13 +278,17 @@ def generate_html_report(clusters_info):
         <a href="eks_report.html" download="eks_report.html" class="download-link">Download Report</a>
 
         <script>
-            function filterPods(namespace, clusterName) {
+            function filterPods(namespace, clusterName, namespaceCounts) {
                 var table = document.getElementById('pod-table-' + clusterName);
                 var rows = table.getElementsByClassName('pod-row');
                 for (var i = 0; i < rows.length; i++) {
                     var rowNamespace = rows[i].getAttribute('data-namespace');
+                    var podNameCell = rows[i].querySelector('td:nth-child(2)');
                     if (namespace === '' || namespace === rowNamespace) {
                         rows[i].style.display = '';
+                        if (namespace !== '' && podNameCell) {
+                            podNameCell.textContent += ` (${namespaceCounts[namespace]} Pods)`;
+                        }
                     } else {
                         rows[i].style.display = 'none';
                     }
@@ -325,14 +335,15 @@ def main():
 
         for cluster in clusters:
             nodes = get_nodes_and_metrics(cluster, session)
-            pods_info = get_pods_and_metrics(cluster, session)
+            pods_info, namespace_counts = get_pods_and_metrics(cluster, session)
             clusters_info.append({
                 'name': cluster,
                 'account': account['name'],
                 'region': account['region'],
                 'nodes': nodes,
                 'pods_info': pods_info,
-                'pods': {pod['namespace']: 1 for pod in pods_info}  # Simple count for dropdown
+                'pods': {pod['namespace']: 1 for pod in pods_info},
+                'namespace_counts': namespace_counts  # Pass namespace counts to the template
             })
 
     generate_html_report(clusters_info)
@@ -340,4 +351,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
