@@ -54,13 +54,13 @@ def get_nodes_and_metrics(cluster_name, aws_session):
         if cpu_utilization_raw.endswith('m'):
             cpu_utilization = int(cpu_utilization_raw[:-1]) / 1000  # Convert millicores to cores
         else:
-            cpu_utilization = int(cpu_utilization_raw)
+            cpu_utilization = int(cpu_utilization_raw) if cpu_utilization_raw.isdigit() else 0
 
         memory_cmd = f"kubectl top node {node_name} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $4}}'"
         memory_utilization = subprocess.check_output(memory_cmd, shell=True).decode('utf-8').strip()
-        memory_utilization_gb = int(memory_utilization[:-2]) / 1024  # Convert MiB to GB
-        
-        memory_utilization_percentage = (memory_utilization_gb / memory_capacity_gb) * 100
+        memory_utilization_gb = int(memory_utilization[:-2]) / 1024 if memory_utilization[:-2].isdigit() else 0  # Convert MiB to GB
+
+        memory_utilization_percentage = (memory_utilization_gb / memory_capacity_gb) * 100 if memory_capacity_gb > 0 else 0
 
         nodes.append({
             'name': node_name,
@@ -76,7 +76,7 @@ def get_nodes_and_metrics(cluster_name, aws_session):
 def get_pods_and_metrics(cluster_name, aws_session):
     pods = []
     namespace_counts = {}
-    cmd = f"kubectl get pods --all-namespaces --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} -o jsonpath='{{range .items[*]}}{{.metadata.namespace}}|{{.metadata.name}}|{{.spec.nodeName}}|{{.spec.containers[*].resources.requests.memory}}|{{.spec.containers[*].resources.requests.cpu}} {{end}}'"
+    cmd = f"kubectl get pods --all-namespaces --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} -o jsonpath='{{range .items[*]}}{{.metadata.namespace}}|{{.metadata.name}}|{{.spec.nodeName}} {{end}}'"
     
     try:
         pod_info = subprocess.check_output(cmd, shell=True).decode('utf-8').strip().split()
@@ -86,7 +86,7 @@ def get_pods_and_metrics(cluster_name, aws_session):
 
     for pod in pod_info:
         try:
-            namespace, pod_name, node_name, memory_request, cpu_request = pod.split('|')
+            namespace, pod_name, node_name = pod.split('|')
 
             # Increment the namespace count
             if namespace not in namespace_counts:
@@ -104,7 +104,7 @@ def get_pods_and_metrics(cluster_name, aws_session):
             if cpu_utilization_raw.endswith('m'):
                 cpu_utilization = int(cpu_utilization_raw[:-1]) / 1000  # Convert millicores to cores
             else:
-                cpu_utilization = int(cpu_utilization_raw)
+                cpu_utilization = int(cpu_utilization_raw) if cpu_utilization_raw.isdigit() else 0
 
             # Get memory utilization for the pod
             memory_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $3}}'"
@@ -114,14 +114,7 @@ def get_pods_and_metrics(cluster_name, aws_session):
                 print(f"Warning: No memory utilization data for pod {pod_name} in namespace {namespace}. Skipping this pod.")
                 continue
 
-            memory_utilization_gb = int(memory_utilization[:-2]) / 1024  # Convert MiB to GB
-            memory_request_gb = int(memory_request[:-2]) / 1024 if memory_request.endswith('Mi') else int(memory_request[:-2])
-
-            # Calculate memory utilization percentage
-            if memory_request_gb > 0:
-                memory_utilization_percentage = (memory_utilization_gb / memory_request_gb) * 100
-            else:
-                memory_utilization_percentage = 0.0
+            memory_utilization_gb = int(memory_utilization[:-2]) / 1024 if memory_utilization[:-2].isdigit() else 0  # Convert MiB to GB
 
             pods.append({
                 'namespace': namespace,
@@ -129,11 +122,10 @@ def get_pods_and_metrics(cluster_name, aws_session):
                 'node_name': node_name,
                 'cpu_utilization': f"{cpu_utilization:.2f}",
                 'memory_utilization_gb': f"{memory_utilization_gb:.2f} GB",
-                'memory_utilization_percentage': f"{memory_utilization_percentage:.2f}"
             })
 
-        except Exception as e:
-            print(f"Error processing pod {pod_name} in namespace {namespace}: {e}")
+        except ValueError as e:
+            print(f"Error processing pod in namespace {namespace}: {e}")
             continue
 
     return pods, namespace_counts
@@ -202,7 +194,7 @@ def generate_html_report(clusters_info):
         <h3>Pods Information by Namespace</h3>
         <div class="dropdown">
             <label for="namespace-select-{{ cluster.name }}">Select Namespace:</label>
-            <select id="namespace-select-{{ cluster.name }}" onchange="filterPods(this.value, '{{ cluster.name }}', {{ cluster.namespace_counts }})">
+            <select id="namespace-select-{{ cluster.name }}" onchange="filterPods(this.value, '{{ cluster.name }}')">
                 <option value="">Show All</option>
                 {% for namespace in cluster.pods %}
                 <option value="{{ namespace }}">{{ namespace }} ({{ cluster.namespace_counts[namespace] }} Pods)</option>
@@ -252,7 +244,7 @@ def generate_html_report(clusters_info):
             </thead>
             <tbody>
             {% set max_cpu_pods = cluster.pods_info | sort(attribute='cpu_utilization', reverse=True) %}
-            {% set max_memory_pods = cluster.pods_info | sort(attribute='memory_utilization_percentage', reverse=True) %}
+            {% set max_memory_pods = cluster.pods_info | sort(attribute='memory_utilization_gb', reverse=True) %}
             {% for pod in max_cpu_pods %}
             <tr class="max-cpu-row">
                 <td>{{ pod.namespace }}</td>
@@ -278,17 +270,13 @@ def generate_html_report(clusters_info):
         <a href="eks_report.html" download="eks_report.html" class="download-link">Download Report</a>
 
         <script>
-            function filterPods(namespace, clusterName, namespaceCounts) {
+            function filterPods(namespace, clusterName) {
                 var table = document.getElementById('pod-table-' + clusterName);
                 var rows = table.getElementsByClassName('pod-row');
                 for (var i = 0; i < rows.length; i++) {
                     var rowNamespace = rows[i].getAttribute('data-namespace');
-                    var podNameCell = rows[i].querySelector('td:nth-child(2)');
                     if (namespace === '' || namespace === rowNamespace) {
                         rows[i].style.display = '';
-                        if (namespace !== '' && podNameCell) {
-                            podNameCell.textContent += ` (${namespaceCounts[namespace]} Pods)`;
-                        }
                     } else {
                         rows[i].style.display = 'none';
                     }
