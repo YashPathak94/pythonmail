@@ -8,14 +8,14 @@ from jinja2 import Template
 accounts = [
     {
         'name': 'dev',
-        'region': 'us-west-2'
+        'region': 'us-east-1'
     },
     {
-        'name': 'devB',
-        'region': 'us-west-1'
+        'name': 'idev',
+        'region': 'us-east00-1'
     },
     {
-        'name': 'devC',
+        'name': 'intg',
         'region': 'us-east-1'
     },
     # Add more accounts as needed
@@ -163,20 +163,24 @@ def generate_html_report(clusters_info, current_env):
             th { background-color: #007BFF; color: white; }
             h2 { margin-top: 50px; }
             h1 { color: #007BFF; text-align: center; }
+            p { font-weight: bold; color: black; }
             .download-link { margin-top: 20px; }
             .gauge-container { width: 100px; height: 50px; background: #e6e6e6; border-radius: 5px; position: relative; }
             .gauge-fill { height: 100%; border-radius: 5px; }
             .gauge-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; }
             .dropdown { margin-bottom: 10px; }
-            .env-selector { margin-bottom: 20px; text-align: center; }
+            .env-selector { margin-bottom: 20px; text-align: center; font-weight: bold; color: black; }
+            #env-select { border: 2px solid black; font-weight: bold; padding: 5px; }
             .pagination { display: flex; justify-content: center; margin-top: 20px; }
             .pagination button { margin: 0 2px; padding: 5px 10px; border: 1px solid #ddd; background-color: #f8f9fa; cursor: pointer; }
             .pagination button:hover { background-color: #007BFF; color: white; }
             .pagination button.disabled { background-color: #e9ecef; cursor: not-allowed; }
+            .footer { text-align: center; margin-top: 50px; font-size: 14px; font-weight: bold; }
+            .footer span { color: red; }
         </style>
     </head>
     <body>
-        <h1>Welcome to EKS clusters dashboard with VENERABLE</h1>
+        <h1>Welcome to EKS clusters dashboard VENERABLE</h1>
         <div class="env-selector">
             <label for="env-select">Select Environment: </label>
             <select id="env-select" onchange="changeEnvironment()">
@@ -200,7 +204,7 @@ def generate_html_report(clusters_info, current_env):
                 <tr>
                     <th>Node Name</th>
                     <th>CPU Capacity (vCPU)</th>
-                    <th>Memory Capacity (GB)</th>
+                    <th>Memory Capacity (MB)</th>
                     <th>CPU Utilization (%)</th>
                     <th>Memory Utilization (GB)</th>
                     <th>Memory Utilization (%)</th>
@@ -305,6 +309,10 @@ def generate_html_report(clusters_info, current_env):
 
         <a href="eks_report.html" download="eks_report.html" class="download-link">Download Report</a>
 
+        <div class="footer">
+            Build with <span>❤️</span> for Venerable
+        </div>
+
         <script>
             const rowsPerPage = 10;
 
@@ -387,6 +395,7 @@ def generate_html_report(clusters_info, current_env):
     )
 
     return html_content
+
 
 def lambda_handler(event, context):
     # Default to 'dev' environment if not specified
