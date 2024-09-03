@@ -3,6 +3,7 @@ import sys
 import boto3
 import subprocess
 from jinja2 import Template
+from datetime import datetime
 
 # Define the different AWS accounts/clusters
 accounts = [
@@ -12,7 +13,7 @@ accounts = [
     },
     {
         'name': 'idev',
-        'region': 'us-east00-1'
+        'region': 'us-east-1'
     },
     {
         'name': 'intg',
@@ -149,6 +150,9 @@ def get_pods_and_metrics(cluster_name, aws_session):
     return pods, namespace_counts
 
 def generate_html_report(clusters_info, current_env):
+    # Generate a timestamp
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     template = """
     <!DOCTYPE html>
     <html lang="en">
@@ -157,7 +161,13 @@ def generate_html_report(clusters_info, current_env):
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>EKS Cluster Dashboard</title>
         <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
+            body {
+                font-family: Arial, sans-serif;
+                margin: 20px;
+                background-color: white;
+                color: black;
+                transition: all 0.3s ease;
+            }
             table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
             th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
             th { background-color: #007BFF; color: white; }
@@ -177,10 +187,43 @@ def generate_html_report(clusters_info, current_env):
             .pagination button.disabled { background-color: #e9ecef; cursor: not-allowed; }
             .footer { text-align: center; margin-top: 50px; font-size: 14px; font-weight: bold; }
             .footer span { color: red; }
+            .timestamp { text-align: right; font-size: 12px; color: gray; margin-bottom: 20px; }
+            .theme-toggle {
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                padding: 10px;
+                background-color: #007BFF;
+                color: white;
+                border: none;
+                border-radius: 5px;
+                cursor: pointer;
+                font-weight: bold;
+            }
+            .dark-theme {
+                background-color: black;
+                color: white;
+            }
+            .dark-theme th {
+                background-color: #333;
+            }
+            .dark-theme .env-selector, .dark-theme p {
+                color: white;
+            }
+            .dark-theme #env-select {
+                border: 2px solid white;
+                background-color: black;
+                color: white;
+            }
         </style>
     </head>
     <body>
-        <h1>Welcome to EKS clusters dashboard VENERABLE</h1>
+        <h1>Welcome to EKS clusters dashboard with VENERABLE</h1>
+        
+        <div class="timestamp">Report generated on: {{ timestamp }}</div>
+
+        <button class="theme-toggle" onclick="toggleTheme()">Switch to Dark Theme</button>
+        
         <div class="env-selector">
             <label for="env-select">Select Environment: </label>
             <select id="env-select" onchange="changeEnvironment()">
@@ -204,7 +247,7 @@ def generate_html_report(clusters_info, current_env):
                 <tr>
                     <th>Node Name</th>
                     <th>CPU Capacity (vCPU)</th>
-                    <th>Memory Capacity (MB)</th>
+                    <th>Memory Capacity (GB)</th>
                     <th>CPU Utilization (%)</th>
                     <th>Memory Utilization (GB)</th>
                     <th>Memory Utilization (%)</th>
@@ -310,7 +353,7 @@ def generate_html_report(clusters_info, current_env):
         <a href="eks_report.html" download="eks_report.html" class="download-link">Download Report</a>
 
         <div class="footer">
-            Build with <span>❤️</span> for Venerable
+            Build with <span>❤️</span> VENERABLE
         </div>
 
         <script>
@@ -376,6 +419,19 @@ def generate_html_report(clusters_info, current_env):
                     rows[i].style.display = (i >= start && i < end) ? '' : 'none';
                 }
             }
+
+            function toggleTheme() {
+                const body = document.body;
+                const themeToggleButton = document.querySelector('.theme-toggle');
+
+                if (body.classList.contains('dark-theme')) {
+                    body.classList.remove('dark-theme');
+                    themeToggleButton.textContent = 'Switch to Dark Theme';
+                } else {
+                    body.classList.add('dark-theme');
+                    themeToggleButton.textContent = 'Switch to Light Theme';
+                }
+            }
         </script>
     </body>
     </html>
@@ -391,10 +447,12 @@ def generate_html_report(clusters_info, current_env):
         total_pods=total_pods,
         clusters=clusters_info,
         accounts=accounts,
-        current_env=current_env
+        current_env=current_env,
+        timestamp=timestamp  # Pass the timestamp to the template
     )
 
     return html_content
+
 
 
 def lambda_handler(event, context):
