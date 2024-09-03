@@ -191,7 +191,7 @@ def generate_html_report(clusters_info, current_env):
         <p>Total Pods: {{ total_pods }}</p>
 
         {% for cluster in clusters %}
-        {% if cluster.account == current_env %}
+        <div id="cluster-{{ cluster.account }}" style="display: {% if cluster.account == current_env %}block{% else %}none{% endif %};">
         <h2>{{ cluster.name }} ({{ cluster.account }} - {{ cluster.region }})</h2>
         
         <h3>Nodes Information</h3>
@@ -300,7 +300,7 @@ def generate_html_report(clusters_info, current_env):
             </tbody>
         </table>
         <div class="pagination" id="pagination-{{ cluster.name }}"></div>
-        {% endif %}
+        </div>
         {% endfor %}
 
         <a href="eks_report.html" download="eks_report.html" class="download-link">Download Report</a>
@@ -311,7 +311,14 @@ def generate_html_report(clusters_info, current_env):
             function changeEnvironment() {
                 const envSelect = document.getElementById('env-select');
                 const selectedEnv = envSelect.value;
-                window.location.href = `?environment=${selectedEnv}`;
+
+                // Hide all clusters
+                {% for account in accounts %}
+                document.getElementById('cluster-{{ account.name }}').style.display = 'none';
+                {% endfor %}
+                
+                // Show the selected cluster
+                document.getElementById('cluster-' + selectedEnv).style.display = 'block';
             }
 
             function filterPods(namespace, clusterName) {
@@ -385,30 +392,31 @@ def lambda_handler(event, context):
     # Default to 'dev' environment if not specified
     environment = event.get('queryStringParameters', {}).get('environment', 'dev')
     
-    # Set AWS credentials for the selected environment
-    set_aws_credentials(environment)
-    
-    # Set up AWS sessions based on the selected environment
-    selected_account = next((acc for acc in accounts if acc['name'] == environment), accounts[0])
-    session = get_aws_session(selected_account['region'])
-    clusters = get_clusters(session)
-    
     clusters_info = []
-    for cluster in clusters:
-        nodes = get_nodes_and_metrics(cluster, session)
-        pods_info, namespace_counts = get_pods_and_metrics(cluster, session)
-        clusters_info.append({
-            'name': cluster,
-            'account': selected_account['name'],
-            'region': selected_account['region'],
-            'nodes': nodes,
-            'pods_info': pods_info,
-            'pods': {pod['namespace']: 1 for pod in pods_info},
-            'namespace_counts': namespace_counts  # Pass namespace counts to the template
-        })
+
+    for account in accounts:
+        # Set AWS credentials for the current environment
+        set_aws_credentials(account['name'])
+        
+        # Set up AWS sessions based on the selected environment
+        session = get_aws_session(account['region'])
+        clusters = get_clusters(session)
+        
+        for cluster in clusters:
+            nodes = get_nodes_and_metrics(cluster, session)
+            pods_info, namespace_counts = get_pods_and_metrics(cluster, session)
+            clusters_info.append({
+                'name': cluster,
+                'account': account['name'],
+                'region': account['region'],
+                'nodes': nodes,
+                'pods_info': pods_info,
+                'pods': {pod['namespace']: 1 for pod in pods_info},
+                'namespace_counts': namespace_counts  # Pass namespace counts to the template
+            })
 
     # Generate the HTML report in real-time
-    html_content = generate_html_report(clusters_info, selected_account['name'])
+    html_content = generate_html_report(clusters_info, environment)
 
     return {
         'statusCode': 200,
