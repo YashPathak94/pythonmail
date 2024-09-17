@@ -122,28 +122,28 @@ def get_pods_and_metrics(cluster_name, aws_session):
                 namespace_counts[namespace] = 0
             namespace_counts[namespace] += 1
 
-            # Get CPU utilization for the pod
+            # Get CPU utilization for the pod (default to 0 if not found)
             cpu_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $2}}'"
-            cpu_utilization_raw = subprocess.check_output(cpu_cmd, shell=True).decode('utf-8').strip()
+            try:
+                cpu_utilization_raw = subprocess.check_output(cpu_cmd, shell=True).decode('utf-8').strip()
+                if cpu_utilization_raw.endswith('m'):
+                    cpu_utilization = int(cpu_utilization_raw[:-1]) / 1000  # Convert millicores to cores
+                else:
+                    cpu_utilization = int(cpu_utilization_raw) if cpu_utilization_raw.isdigit() else 0
+            except subprocess.CalledProcessError:
+                # If data is not found, default CPU utilization to 0
+                print(f"Warning: No CPU utilization data for pod {pod_name} in namespace {namespace}. Setting CPU utilization to 0.")
+                cpu_utilization = 0
 
-            if not cpu_utilization_raw:
-                print(f"Warning: No CPU utilization data for pod {pod_name} in namespace {namespace}. Skipping this pod.")
-                continue
-
-            if cpu_utilization_raw.endswith('m'):
-                cpu_utilization = int(cpu_utilization_raw[:-1]) / 1000  # Convert millicores to cores
-            else:
-                cpu_utilization = int(cpu_utilization_raw) if cpu_utilization_raw.isdigit() else 0
-
-            # Get memory utilization for the pod
+            # Get memory utilization for the pod (default to 0 if not found)
             memory_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $3}}'"
-            memory_utilization = subprocess.check_output(memory_cmd, shell=True).decode('utf-8').strip()
-
-            if not memory_utilization:
-                print(f"Warning: No memory utilization data for pod {pod_name} in namespace {namespace}. Skipping this pod.")
-                continue
-
-            memory_utilization_gb = int(memory_utilization[:-2]) / 1024 if memory_utilization[:-2].isdigit() else 0  # Convert MiB to GB
+            try:
+                memory_utilization_raw = subprocess.check_output(memory_cmd, shell=True).decode('utf-8').strip()
+                memory_utilization_gb = int(memory_utilization_raw[:-2]) / 1024 if memory_utilization_raw[:-2].isdigit() else 0  # Convert MiB to GB
+            except subprocess.CalledProcessError:
+                # If data is not found, default memory utilization to 0
+                print(f"Warning: No memory utilization data for pod {pod_name} in namespace {namespace}. Setting memory utilization to 0.")
+                memory_utilization_gb = 0
 
             pods.append({
                 'namespace': namespace,
