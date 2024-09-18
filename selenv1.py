@@ -109,14 +109,39 @@ def get_pods_and_metrics(cluster_name, aws_session):
 
             # Increment the namespace count
             if namespace not in namespace_counts:
-                namespace_counts[namespace] = 0
+                namespace_counts[namespace] =
+                                namespace_counts[namespace] = 0
             namespace_counts[namespace] += 1
 
-            # Add the pod info
+            # Get CPU utilization for the pod
+            cpu_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $2}}'"
+            cpu_utilization_raw = subprocess.check_output(cpu_cmd, shell=True).decode('utf-8').strip()
+
+            if not cpu_utilization_raw:
+                print(f"Warning: No CPU utilization data for pod {pod_name} in namespace {namespace}. Skipping this pod.")
+                continue
+
+            if cpu_utilization_raw.endswith('m'):
+                cpu_utilization = int(cpu_utilization_raw[:-1]) / 1000  # Convert millicores to cores
+            else:
+                cpu_utilization = int(cpu_utilization_raw) if cpu_utilization_raw.isdigit() else 0
+
+            # Get memory utilization for the pod
+            memory_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $3}}'"
+            memory_utilization = subprocess.check_output(memory_cmd, shell=True).decode('utf-8').strip()
+
+            if not memory_utilization:
+                print(f"Warning: No memory utilization data for pod {pod_name} in namespace {namespace}. Skipping this pod.")
+                continue
+
+            memory_utilization_gb = int(memory_utilization[:-2]) / 1024 if memory_utilization[:-2].isdigit() else 0  # Convert MiB to GB
+
             pods.append({
                 'namespace': namespace,
                 'name': pod_name,
-                'node_name': node_name
+                'node_name': node_name,
+                'cpu_utilization': f"{cpu_utilization:.2f}",
+                'memory_utilization_gb': f"{memory_utilization_gb:.2f} GB",
             })
 
         except ValueError as e:
@@ -152,17 +177,20 @@ def generate_html_report(clusters_info, current_env):
             h1 { color: #007BFF; text-align: center; }
             p { font-weight: bold; color: black; }
             .download-link { margin-top: 20px; }
+            .gauge-container { width: 100px; height: 50px; background: #e6e6e6; border-radius: 5px; position: relative; }
+            .gauge-fill { height: 100%; border-radius: 5px; }
+            .gauge-label { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-weight: bold; }
+            .dropdown { margin-bottom: 10px; }
             .env-selector { margin-bottom: 20px; text-align: center; font-weight: bold; color: black; }
             #env-select { border: 2px solid black; font-weight: bold; padding: 5px; }
             .footer { text-align: center; margin-top: 50px; font-size: 14px; font-weight: bold; }
             .footer span { color: red; }
-            .timestamp { text-align: right; font-size: 12px; color: grey; font-weight: bold; margin-bottom: 20px; }
-            .cluster-summary { margin-bottom: 30px; }
-            .cluster-summary th { background-color: #4CAF50; color: white; }
+            .timestamp { text-align: right; font-size: 14px; color: grey; font-weight: bold; margin-bottom: 20px; }
         </style>
     </head>
     <body>
         <h1>Welcome to EKS Clusters Dashboard with VENERABLE</h1>
+
         <div class="timestamp">Report generated on: {{ timestamp }}</div>
 
         <div class="env-selector">
@@ -178,9 +206,8 @@ def generate_html_report(clusters_info, current_env):
         <p>Total Nodes: {{ total_nodes }}</p>
         <p>Total Pods: {{ total_pods }}</p>
 
-        <!-- Second table to show per-cluster total nodes and pods -->
-        <h2>Cluster Summary (Total Nodes & Pods per Cluster)</h2>
-        <table class="cluster-summary">
+        <h3>Cluster Summary (Total Nodes & Pods per Cluster)</h3>
+        <table>
             <thead>
                 <tr>
                     <th>Cluster Name</th>
@@ -199,7 +226,6 @@ def generate_html_report(clusters_info, current_env):
             </tbody>
         </table>
 
-        <!-- Existing table for node details -->
         {% for cluster in clusters %}
         <div id="cluster-{{ cluster.account }}" style="display: {% if cluster.account == current_env %}block{% else %}none{% endif %};">
         <h2>{{ cluster.name }} ({{ cluster.account }} - {{ cluster.region }})</h2>
@@ -224,33 +250,95 @@ def generate_html_report(clusters_info, current_env):
                     <td>{{ node.memory_capacity_gb }}</td>
                     <td>{{ node.cpu_utilization }}%</td>
                     <td>{{ node.memory_utilization_gb }}</td>
-                    <td>{{ node.memory_utilization_percentage }}%</td>
+                    <td>
+                        <div class="gauge-container">
+                            <div class="gauge-fill" style="width: {{ node.memory_utilization_percentage }}%; background: {% if node.memory_utilization_percentage|float < 75 %}green{% else %}orange{% endif %};"></div>
+                            <div class="gauge-label">{{ node.memory_utilization_percentage }}%</div>
+                        </div>
+                    </td>
                 </tr>
             {% endfor %}
             </tbody>
         </table>
 
-        <h3>Pods Information</h3>
-        <table>
+        <h3>Pods Information by Namespace</h3>
+        <div class="dropdown">
+            <label for="namespace-select-{{ cluster.name }}">Select Namespace:</label>
+            <select id="namespace-select-{{ cluster.name }}" onchange="filterPods(this.value, '{{ cluster.name }}')">
+                <option value="">Show All</option>
+                {% for namespace in cluster.pods %}
+                <option value="{{ namespace }}">{{ namespace }} ({{ cluster.namespace_counts[namespace] }} Pods)</option>
+                {% endfor %}
+            </select>
+        </div>
+        <table id="pod-table-{{ cluster.name }}">
             <thead>
                 <tr>
                     <th>Namespace</th>
                     <th>Pod Name</th>
                     <th>Node Name</th>
+                    <th>CPU Utilization (vCPU)</th>
+                    <th>Memory Utilization (GB)</th>
                 </tr>
             </thead>
             <tbody>
             {% for pod in cluster.pods_info %}
-                <tr>
+                <tr class="pod-row" data-namespace="{{ pod.namespace }}">
                     <td>{{ pod.namespace }}</td>
                     <td>{{ pod.name }}</td>
                     <td>{{ pod.node_name }}</td>
+                    <td>{{ pod.cpu_utilization }}</td>
+                    <td>{{ pod.memory_utilization_gb }}</td>
                 </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+        <h3>Maximum Utilization within Cluster</h3>
+        <div class="dropdown">
+            <label for="max-utilization-select-{{ cluster.name }}">Select Metric:</label>
+            <select id="max-utilization-select-{{ cluster.name }}" onchange="filterMaxUtilization(this.value, '{{ cluster.name }}')">
+                <option value="cpu">Max CPU Utilization</option>
+                <option value="memory">Max Memory Utilization</option>
+            </select>
+        </div>
+        <table id="max-utilization-table-{{ cluster.name }}">
+            <thead>
+                <tr>
+                    <th>Namespace</th>
+                    <th>Pod Name</th>
+                    <th>Node Name</th>
+                    <th>CPU Utilization (vCPU)</th>
+                    <th>Memory Utilization (GB)</th>
+                </tr>
+            </thead>
+            <tbody id="max-utilization-body-{{ cluster.name }}">
+            {% set max_cpu_pods = cluster.pods_info | sort(attribute='cpu_utilization', reverse=True)[:5] %}
+            {% set max_memory_pods = cluster.pods_info | sort(attribute='memory_utilization_gb', reverse=True)[:5] %}
+            {% for pod in max_cpu_pods %}
+            <tr class="max-cpu-row">
+                <td>{{ pod.namespace }}</td>
+                <td>{{ pod.name }}</td>
+                <td>{{ pod.node_name }}</td>
+                <td>{{ pod.cpu_utilization }}</td>
+                <td>{{ pod.memory_utilization_gb }}</td>
+            </tr>
+            {% endfor %}
+            {% for pod in max_memory_pods %}
+            <tr class="max-memory-row">
+                <td>{{ pod.namespace }}</td>
+                <td>{{ pod.name }}</td>
+                <td>{{ pod.node_name }}</td>
+                <td>{{ pod.cpu_utilization }}</td>
+                <td>{{ pod.memory_utilization_gb }}</td>
+            </tr>
             {% endfor %}
             </tbody>
         </table>
         </div>
         {% endfor %}
+
+        <a href="eks_report.html" download="eks_report.html" class="download-link">Download Report</a>
 
         <div class="footer">
             Build with <span>❤️</span> VENERABLE
@@ -269,6 +357,42 @@ def generate_html_report(clusters_info, current_env):
                 // Show the selected cluster
                 document.getElementById('cluster-' + selectedEnv).style.display = 'block';
             }
+
+            function filterPods(namespace, clusterName) {
+                var table = document.getElementById('pod-table-' + clusterName);
+                var rows = table.getElementsByClassName('pod-row');
+                for (var i = 0; i < rows.length; i++) {
+                    var rowNamespace = rows[i].getAttribute('data-namespace');
+                    if (namespace === '' || namespace === rowNamespace) {
+                        rows[i].style.display = '';
+                    } else {
+                        rows[i].style.display = 'none';
+                    }
+                }
+            }
+
+            function filterMaxUtilization(metric, clusterName) {
+                var maxCpuRows = document.querySelectorAll('#max-utilization-table-' + clusterName + ' .max-cpu-row');
+                var maxMemoryRows = document.querySelectorAll('#max-utilization-table-' + clusterName + ' .max-memory-row');
+
+                if (metric === 'cpu') {
+                    showMaxCpuRows(maxCpuRows);
+                } else if (metric === 'memory') {
+                    showMaxMemoryRows(maxMemoryRows);
+                }
+            }
+
+            function showMaxCpuRows(rows) {
+                for (let i = 0; i < rows.length; i++) {
+                    rows[i].style.display = '';
+                }
+            }
+
+            function showMaxMemoryRows(rows) {
+                for (let i = 0; i < rows.length; i++) {
+                    rows[i].style.display = '';
+                }
+            }
         </script>
     </body>
     </html>
@@ -277,8 +401,8 @@ def generate_html_report(clusters_info, current_env):
     total_clusters = len(clusters_info)
     total_nodes = sum(len(cluster['nodes']) for cluster in clusters_info)
     total_pods = sum(len(cluster['pods_info']) for cluster in clusters_info)
-    
-    # Add total nodes and pods per cluster
+
+    # Add per-cluster total nodes and total pods
     for cluster in clusters_info:
         cluster['total_nodes'] = len(cluster['nodes'])
         cluster['total_pods'] = len(cluster['pods_info'])
@@ -291,10 +415,11 @@ def generate_html_report(clusters_info, current_env):
         clusters=clusters_info,
         accounts=accounts,
         current_env=current_env,
-        timestamp=timestamp
+        timestamp=timestamp  # Pass the timestamp to the template
     )
 
     return html_content
+
 
 def lambda_handler(event, context):
     # Default to 'dev' environment if not specified
@@ -324,7 +449,7 @@ def lambda_handler(event, context):
             })
 
     # Generate the HTML report in real-time
-        html_content = generate_html_report(clusters_info, environment)
+    html_content = generate_html_report(clusters_info, environment)
 
     return {
         'statusCode': 200,
@@ -345,4 +470,3 @@ if __name__ == '__main__':
     with open('eks_dashboard.html', 'w') as f:
         f.write(result['body'])
     print("Dashboard HTML generated.")
-
