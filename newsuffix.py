@@ -5,7 +5,7 @@ import subprocess
 from jinja2 import Template
 from datetime import datetime
 
-# Define the different AWS accounts/clusters
+# Define the different AWS accounts/environments
 accounts = [
     {
         'name': 'dev',
@@ -28,19 +28,19 @@ accounts = [
 
 # Map environments to their corresponding suffixes
 env_to_suffix_map = {
-    'dev': ['dev', 'devB', 'devC'],
-    'intg': ['intg', 'intgB', 'intgC'],
-    'accp': ['accp', 'accpB', 'accpC'],
-    'prod': ['prodA', 'prodB']
+    'dev': ['dev', 'devb', 'devc'],
+    'intg': ['intg', 'intgb', 'intgc'],
+    'accp': ['accp', 'accpb', 'accpc'],
+    'prod': ['proda', 'prodb']
 }
 
 def set_aws_credentials(environment):
     """
     Dynamically set AWS credentials in the environment for the given environment.
     """
-    os.environ['AWS_ACCESS_KEY_ID'] = os.getenv(f'{environment}_AWS_ACCESS_KEY_ID')
-    os.environ['AWS_SECRET_ACCESS_KEY'] = os.getenv(f'{environment}_AWS_SECRET_ACCESS_KEY')
-    os.environ['AWS_SESSION_TOKEN'] = os.getenv(f'{environment}_AWS_SESSION_TOKEN')  # Optional
+    os.environ['AWS_ACCESS_KEY_ID'] = os.getenv(f'{environment.upper()}_AWS_ACCESS_KEY_ID')
+    os.environ['AWS_SECRET_ACCESS_KEY'] = os.getenv(f'{environment.upper()}_AWS_SECRET_ACCESS_KEY')
+    os.environ['AWS_SESSION_TOKEN'] = os.getenv(f'{environment.upper()}_AWS_SESSION_TOKEN')  # Optional
 
     if not os.environ['AWS_ACCESS_KEY_ID'] or not os.environ['AWS_SECRET_ACCESS_KEY']:
         print(f"Error: AWS credentials for {environment} are not set correctly.")
@@ -62,7 +62,9 @@ def get_clusters(aws_session):
 
 def get_nodes_and_metrics(cluster_name, aws_session):
     nodes = []
-    cmd = f"kubectl get nodes --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} -o jsonpath='{{range .items[*]}}{{.metadata.name}}|{{.status.capacity.cpu}}|{{.status.capacity.memory}} {{end}}'"
+    account_id = aws_session.client('sts').get_caller_identity()['Account']
+    context = f"arn:aws:eks:{aws_session.region_name}:{account_id}:cluster/{cluster_name}"
+    cmd = f"kubectl get nodes --context={context} -o jsonpath='{{range .items[*]}}{{.metadata.name}}|{{.status.capacity.cpu}}|{{.status.capacity.memory}} {{end}}'"
 
     try:
         node_info = subprocess.check_output(cmd, shell=True).decode('utf-8').strip().split()
@@ -79,17 +81,22 @@ def get_nodes_and_metrics(cluster_name, aws_session):
         node_name, cpu_capacity, memory_capacity = node_details
         memory_capacity_gb = int(memory_capacity[:-2]) / 1024  # Convert MiB to GB
 
-        cpu_cmd = f"kubectl top node {node_name} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $2}}'"
-        cpu_utilization_raw = subprocess.check_output(cpu_cmd, shell=True).decode('utf-8').strip()
+        cpu_cmd = f"kubectl top node {node_name} --context={context} --no-headers | awk '{{print $2}}'"
+        try:
+            cpu_utilization_raw = subprocess.check_output(cpu_cmd, shell=True).decode('utf-8').strip()
+            if cpu_utilization_raw.endswith('m'):
+                cpu_utilization = int(cpu_utilization_raw[:-1]) / 1000  # Convert millicores to cores
+            else:
+                cpu_utilization = int(cpu_utilization_raw) if cpu_utilization_raw.isdigit() else 0
+        except subprocess.CalledProcessError:
+            cpu_utilization = 0
 
-        if cpu_utilization_raw.endswith('m'):
-            cpu_utilization = int(cpu_utilization_raw[:-1]) / 1000  # Convert millicores to cores
-        else:
-            cpu_utilization = int(cpu_utilization_raw) if cpu_utilization_raw.isdigit() else 0
-
-        memory_cmd = f"kubectl top node {node_name} --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} --no-headers | awk '{{print $4}}'"
-        memory_utilization = subprocess.check_output(memory_cmd, shell=True).decode('utf-8').strip()
-        memory_utilization_gb = int(memory_utilization[:-2]) / 1024 if memory_utilization[:-2].isdigit() else 0  # Convert MiB to GB
+        memory_cmd = f"kubectl top node {node_name} --context={context} --no-headers | awk '{{print $4}}'"
+        try:
+            memory_utilization = subprocess.check_output(memory_cmd, shell=True).decode('utf-8').strip()
+            memory_utilization_gb = int(memory_utilization[:-2]) / 1024 if memory_utilization[:-2].isdigit() else 0  # Convert MiB to GB
+        except subprocess.CalledProcessError:
+            memory_utilization_gb = 0
 
         memory_utilization_percentage = (memory_utilization_gb / memory_capacity_gb) * 100 if memory_capacity_gb > 0 else 0
 
@@ -107,7 +114,9 @@ def get_nodes_and_metrics(cluster_name, aws_session):
 def get_pods_and_metrics(cluster_name, aws_session):
     pods = []
     namespace_counts = {}
-    cmd = f"kubectl get pods --all-namespaces --context=arn:aws:eks:{aws_session.region_name}:{aws_session.client('sts').get_caller_identity()['Account']}:cluster/{cluster_name} -o jsonpath='{{range .items[*]}}{{.metadata.namespace}}|{{.metadata.name}}|{{.spec.nodeName}} {{end}}'"
+    account_id = aws_session.client('sts').get_caller_identity()['Account']
+    context = f"arn:aws:eks:{aws_session.region_name}:{account_id}:cluster/{cluster_name}"
+    cmd = f"kubectl get pods --all-namespaces --context={context} -o jsonpath='{{range .items[*]}}{{.metadata.namespace}}|{{.metadata.name}}|{{.spec.nodeName}} {{end}}'"
 
     try:
         pod_info = subprocess.check_output(cmd, shell=True).decode('utf-8').strip().split()
@@ -131,19 +140,20 @@ def get_pods_and_metrics(cluster_name, aws_session):
             })
 
         except ValueError as e:
-            print(f"Error processing pod in namespace {namespace}: {e}")
+            print(f"Error processing pod: {e}")
             continue
 
     return pods, namespace_counts
 
-def count_pods_by_suffix(namespace_counts, suffix):
+def count_pods_by_suffix(pods_info, selected_suffix):
     """
     Count total number of pods for namespaces that end with a given suffix.
     """
     total_pods = 0
-    for namespace, count in namespace_counts.items():
-        if namespace.endswith(suffix):
-            total_pods += count
+    for pod in pods_info:
+        namespace = pod['namespace']
+        if namespace.endswith(selected_suffix):
+            total_pods += 1
     return total_pods
 
 def generate_html_report(clusters_info, current_env, selected_suffix):
@@ -155,7 +165,11 @@ def generate_html_report(clusters_info, current_env, selected_suffix):
     <!DOCTYPE html>
     <html lang="en">
     <head>
-        <!-- ... [Same as before, omitted for brevity] ... -->
+        <!-- [Head content omitted for brevity, same as before] -->
+        <title>EKS Cluster Dashboard</title>
+        <style>
+            /* [Styles omitted for brevity, same as before] */
+        </style>
     </head>
     <body>
         <h1>Welcome to EKS Clusters Dashboard with VENERABLE</h1>
@@ -180,14 +194,37 @@ def generate_html_report(clusters_info, current_env, selected_suffix):
             </select>
         </div>
 
-        <!-- ... [Rest of the HTML template remains the same] ... -->
+        <p>Total Clusters: {{ total_clusters }}</p>
+        <p>Total Nodes: {{ total_nodes }}</p>
+        <p>Total Pods: {{ total_pods }}</p>
+        <p>Total Pods in namespaces ending with "{{ selected_suffix }}": {{ total_pods_suffix }}</p>
+
+        <!-- [Rest of the HTML content remains the same, including clusters data tables] -->
+
+        <script>
+            function changeEnvironment() {
+                const envSelect = document.getElementById('env-select');
+                const selectedEnv = envSelect.value;
+                window.location.href = `?environment=${selectedEnv}`;
+            }
+
+            function changeSuffix() {
+                const suffixSelect = document.getElementById('suffix-select');
+                const selectedSuffix = suffixSelect.value;
+                const envSelect = document.getElementById('env-select');
+                const selectedEnv = envSelect.value;
+                window.location.href = `?environment=${selectedEnv}&suffix=${selectedSuffix}`;
+            }
+
+            // [JavaScript functions for filtering pods and max utilization remain the same]
+        </script>
     </body>
     </html>
     """
 
     # Calculate the total number of pods for the selected suffix
     total_pods_suffix = sum(
-        count_pods_by_suffix(cluster['namespace_counts'], selected_suffix) for cluster in clusters_info
+        count_pods_by_suffix(cluster['pods_info'], selected_suffix) for cluster in clusters_info
     )
 
     total_clusters = len(clusters_info)
@@ -220,7 +257,7 @@ def generate_html_report(clusters_info, current_env, selected_suffix):
 
 def lambda_handler(event, context):
     # Default to 'dev' environment and first suffix if not specified
-    environment = event.get('queryStringParameters', {}).get('environment', 'dev')
+    environment = event.get('queryStringParameters', {}).get('environment', 'dev').lower()
     suffix = event.get('queryStringParameters', {}).get('suffix')
 
     # Ensure environment is valid
@@ -234,26 +271,36 @@ def lambda_handler(event, context):
 
     clusters_info = []
 
-    for account in accounts:
-        if account['name'] == environment:
-            # Set AWS credentials for the current environment
-            set_aws_credentials(account['name'])
+    # Find the account that matches the selected environment
+    account = next((acc for acc in accounts if acc['name'] == environment), None)
+    if account:
+        # Set AWS credentials for the current environment
+        set_aws_credentials(account['name'])
 
-            # Set up AWS sessions based on the selected environment
-            session = get_aws_session(account['region'])
-            clusters = get_clusters(session)
+        # Set up AWS session based on the selected environment
+        session = get_aws_session(account['region'])
+        clusters = get_clusters(session)
 
-            for cluster in clusters:
-                nodes = get_nodes_and_metrics(cluster, session)
-                pods_info, namespace_counts = get_pods_and_metrics(cluster, session)
-                clusters_info.append({
-                    'name': cluster,
-                    'account': account['name'],
-                    'region': account['region'],
-                    'nodes': nodes,
-                    'pods_info': pods_info,
-                    'namespace_counts': namespace_counts  # Pass namespace counts to the template
-                })
+        for cluster in clusters:
+            nodes = get_nodes_and_metrics(cluster, session)
+            pods_info, namespace_counts = get_pods_and_metrics(cluster, session)
+
+            # Filter pods based on the selected suffix
+            filtered_pods_info = [pod for pod in pods_info if pod['namespace'].endswith(suffix)]
+
+            clusters_info.append({
+                'name': cluster,
+                'account': account['name'],
+                'region': account['region'],
+                'nodes': nodes,
+                'pods_info': pods_info,  # All pods info
+                'filtered_pods_info': filtered_pods_info,  # Pods matching the selected suffix
+                'namespace_counts': namespace_counts  # All namespace counts
+            })
+
+    else:
+        print(f"No account found for environment: {environment}")
+        sys.exit(1)
 
     # Generate the HTML report in real-time
     html_content = generate_html_report(clusters_info, environment, suffix)
