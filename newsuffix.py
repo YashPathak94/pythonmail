@@ -38,13 +38,18 @@ def set_aws_credentials(environment):
     """
     Dynamically set AWS credentials in the environment for the given environment.
     """
-    os.environ['AWS_ACCESS_KEY_ID'] = os.getenv(f'{environment.upper()}_AWS_ACCESS_KEY_ID')
-    os.environ['AWS_SECRET_ACCESS_KEY'] = os.getenv(f'{environment.upper()}_AWS_SECRET_ACCESS_KEY')
-    os.environ['AWS_SESSION_TOKEN'] = os.getenv(f'{environment.upper()}_AWS_SESSION_TOKEN')  # Optional
+    access_key = os.getenv(f'{environment.upper()}_AWS_ACCESS_KEY_ID')
+    secret_key = os.getenv(f'{environment.upper()}_AWS_SECRET_ACCESS_KEY')
+    session_token = os.getenv(f'{environment.upper()}_AWS_SESSION_TOKEN')  # Optional
 
-    if not os.environ['AWS_ACCESS_KEY_ID'] or not os.environ['AWS_SECRET_ACCESS_KEY']:
+    if not access_key or not secret_key:
         print(f"Error: AWS credentials for {environment} are not set correctly.")
         sys.exit(1)
+
+    os.environ['AWS_ACCESS_KEY_ID'] = access_key
+    os.environ['AWS_SECRET_ACCESS_KEY'] = secret_key
+    if session_token:
+        os.environ['AWS_SESSION_TOKEN'] = session_token
 
     print(f"Using credentials for environment: {environment}")
 
@@ -257,8 +262,9 @@ def generate_html_report(clusters_info, current_env, selected_suffix):
 
 def lambda_handler(event, context):
     # Default to 'dev' environment and first suffix if not specified
-    environment = event.get('queryStringParameters', {}).get('environment', 'dev').lower()
-    suffix = event.get('queryStringParameters', {}).get('suffix')
+    query_params = event.get('queryStringParameters') or {}
+    environment = query_params.get('environment', 'dev').lower()
+    suffix = query_params.get('suffix')
 
     # Ensure environment is valid
     if environment not in env_to_suffix_map:
