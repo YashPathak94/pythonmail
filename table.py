@@ -20,6 +20,14 @@ accounts = [
         'name': 'intg',
         'region': 'us-east-1'
     },
+    {
+        'name': 'accp',
+        'region': 'us-east-1'
+    },
+    {
+        'name': 'prod',
+        'region': 'us-east-1'
+    },
     # Add more accounts as needed
 ]
 
@@ -62,9 +70,9 @@ def get_nodes_and_metrics(cluster_name, aws_session):
     nodes = []
     account_id = aws_session.client('sts').get_caller_identity()['Account']
     context = f'arn:aws:eks:{aws_session.region_name}:{account_id}:cluster/{cluster_name}'
-    
-    cmd = f"kubectl get nodes --context={context} -o jsonpath='{{range .items[*]}}{{.metadata.name}}|{{.status.capacity.cpu}}|{{.status.capacity.memory}} {{end}}'"
-    
+
+    cmd = f"kubectl get nodes --context={context} -o jsonpath='{{{{range .items[*]}}}}{{{{.metadata.name}}}}|{{{{.status.capacity.cpu}}}}|{{{{.status.capacity.memory}}}} {{{{end}}}}'"
+
     try:
         node_info = subprocess.check_output(cmd, shell=True).decode('utf-8').strip().split()
     except subprocess.CalledProcessError as e:
@@ -80,7 +88,7 @@ def get_nodes_and_metrics(cluster_name, aws_session):
         node_name, cpu_capacity, memory_capacity = node_details
         memory_capacity_gb = int(memory_capacity[:-2]) / 1024  # Convert MiB to GB
 
-        cpu_cmd = f"kubectl top node {node_name} --context={context} --no-headers | awk '{{print $2}}'"
+        cpu_cmd = f"kubectl top node {node_name} --context={context} --no-headers | awk '{{{{print $2}}}}'"
         try:
             cpu_utilization_raw = subprocess.check_output(cpu_cmd, shell=True).decode('utf-8').strip()
         except subprocess.CalledProcessError:
@@ -91,7 +99,7 @@ def get_nodes_and_metrics(cluster_name, aws_session):
         else:
             cpu_utilization = int(cpu_utilization_raw) if cpu_utilization_raw.isdigit() else 0
 
-        memory_cmd = f"kubectl top node {node_name} --context={context} --no-headers | awk '{{print $4}}'"
+        memory_cmd = f"kubectl top node {node_name} --context={context} --no-headers | awk '{{{{print $4}}}}'"
         try:
             memory_utilization = subprocess.check_output(memory_cmd, shell=True).decode('utf-8').strip()
         except subprocess.CalledProcessError:
@@ -121,9 +129,9 @@ def get_pods_and_metrics(cluster_name, aws_session):
     namespace_counts = {}
     account_id = aws_session.client('sts').get_caller_identity()['Account']
     context = f'arn:aws:eks:{aws_session.region_name}:{account_id}:cluster/{cluster_name}'
-    
-    cmd = f"kubectl get pods --all-namespaces --context={context} -o jsonpath='{{range .items[*]}}{{.metadata.namespace}}|{{.metadata.name}}|{{.spec.nodeName}} {{end}}'"
-    
+
+    cmd = f"kubectl get pods --all-namespaces --context={context} -o jsonpath='{{{{range .items[*]}}}}{{{{.metadata.namespace}}}}|{{{{.metadata.name}}}}|{{{{.spec.nodeName}}}} {{{{end}}}}'"
+
     try:
         pod_info = subprocess.check_output(cmd, shell=True).decode('utf-8').strip().split()
     except subprocess.CalledProcessError as e:
@@ -140,7 +148,7 @@ def get_pods_and_metrics(cluster_name, aws_session):
             namespace_counts[namespace] += 1
 
             # Get CPU utilization for the pod
-            cpu_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context={context} --no-headers | awk '{{print $2}}'"
+            cpu_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context={context} --no-headers | awk '{{{{print $2}}}}'"
             try:
                 cpu_utilization_raw = subprocess.check_output(cpu_cmd, shell=True).decode('utf-8').strip()
             except subprocess.CalledProcessError:
@@ -156,7 +164,7 @@ def get_pods_and_metrics(cluster_name, aws_session):
                 cpu_utilization = int(cpu_utilization_raw) if cpu_utilization_raw.isdigit() else 0
 
             # Get memory utilization for the pod
-            memory_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context={context} --no-headers | awk '{{print $3}}'"
+            memory_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context={context} --no-headers | awk '{{{{print $3}}}}'"
             try:
                 memory_utilization = subprocess.check_output(memory_cmd, shell=True).decode('utf-8').strip()
             except subprocess.CalledProcessError:
@@ -209,34 +217,6 @@ def generate_html_report(clusters_info, current_env):
     # Generate a timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Filter clusters for the current environment
-    clusters_in_env = [cluster for cluster in clusters_info if cluster['account'] == current_env]
-
-    # Aggregate namespace counts
-    aggregated_namespace_counts = defaultdict(int)
-    for cluster in clusters_in_env:
-        for namespace, count in cluster['namespace_counts'].items():
-            aggregated_namespace_counts[namespace] += count
-
-    # Calculate counts by suffix
-    if current_env != 'idev':
-        suffixes = env_to_suffix_map.get(current_env, [])
-        counts_by_suffix = count_pods_by_suffixes(aggregated_namespace_counts, suffixes)
-    else:
-        total_pods = sum(aggregated_namespace_counts.values())
-        counts_by_suffix = {'total_pods': total_pods}
-
-    # Calculate total clusters, nodes, and pods
-    total_clusters = len(clusters_in_env)
-    total_nodes = sum(len(cluster['nodes']) for cluster in clusters_in_env)
-    total_pods = sum(len(cluster['pods_info']) for cluster in clusters_in_env)
-
-    # Add per-cluster total nodes and total pods
-    for cluster in clusters_in_env:
-        cluster['total_nodes'] = len(cluster['nodes'])
-        cluster['total_pods'] = len(cluster['pods_info'])
-
-    # Generate the HTML template
     template = """
     <!DOCTYPE html>
     <html lang="en">
@@ -312,7 +292,7 @@ def generate_html_report(clusters_info, current_env):
             <tbody>
             {% for cluster in clusters_in_env %}
                 <tr>
-                    <td>{{ cluster.name }}</td>
+                    <td>{{ cluster.name }} ({{ cluster.account }})</td>
                     <td>{{ cluster.total_nodes }}</td>
                     <td>{{ cluster.total_pods }}</td>
                 </tr>
@@ -372,6 +352,41 @@ def generate_html_report(clusters_info, current_env):
             {% endfor %}
             </tbody>
         </table>
+
+        <h3>Maximum Utilization within Cluster</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>Namespace</th>
+                    <th>Pod Name</th>
+                    <th>Node Name</th>
+                    <th>CPU Utilization (vCPU)</th>
+                    <th>Memory Utilization (GB)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% set max_cpu_pods = cluster.pods_info | sort(attribute='cpu_utilization', reverse=True)[:5] %}
+                {% set max_memory_pods = cluster.pods_info | sort(attribute='memory_utilization_gb', reverse=True)[:5] %}
+                {% for pod in max_cpu_pods %}
+                <tr>
+                    <td>{{ pod.namespace }}</td>
+                    <td>{{ pod.name }}</td>
+                    <td>{{ pod.node_name }}</td>
+                    <td>{{ pod.cpu_utilization }}</td>
+                    <td>{{ pod.memory_utilization_gb }}</td>
+                </tr>
+                {% endfor %}
+                {% for pod in max_memory_pods %}
+                <tr>
+                    <td>{{ pod.namespace }}</td>
+                    <td>{{ pod.name }}</td>
+                    <td>{{ pod.node_name }}</td>
+                    <td>{{ pod.cpu_utilization }}</td>
+                    <td>{{ pod.memory_utilization_gb }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
         {% endfor %}
 
         <div class="footer">
@@ -389,12 +404,39 @@ def generate_html_report(clusters_info, current_env):
     </html>
     """
 
+    # Filter clusters for the current environment
+    clusters_in_env = [cluster for cluster in clusters_info if cluster['account'] == current_env]
+
+    # Aggregate namespace counts
+    aggregated_namespace_counts = defaultdict(int)
+    for cluster in clusters_in_env:
+        for namespace, count in cluster['namespace_counts'].items():
+            aggregated_namespace_counts[namespace] += count
+
+    # Calculate counts by suffix
+    if current_env != 'idev':
+        suffixes = env_to_suffix_map.get(current_env, [])
+        counts_by_suffix = count_pods_by_suffixes(aggregated_namespace_counts, suffixes)
+    else:
+        total_pods = sum(aggregated_namespace_counts.values())
+        counts_by_suffix = {'total_pods': total_pods}
+
+    # Calculate total clusters, nodes, and pods
+    total_clusters = len(clusters_in_env)
+    total_nodes = sum(len(cluster['nodes']) for cluster in clusters_in_env)
+    total_pods = sum(len(cluster['pods_info']) for cluster in clusters_in_env)
+
+    # Add per-cluster total nodes and total pods
+    for cluster in clusters_in_env:
+        cluster['total_nodes'] = len(cluster['nodes'])
+        cluster['total_pods'] = len(cluster['pods_info'])
+
     html_template = Template(template)
     html_content = html_template.render(
         total_clusters=total_clusters,
         total_nodes=total_nodes,
         total_pods=total_pods,
-        clusters=clusters_in_env,
+        clusters_in_env=clusters_in_env,
         accounts=accounts,
         current_env=current_env,
         counts_by_suffix=counts_by_suffix,
