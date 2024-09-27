@@ -8,40 +8,22 @@ from collections import defaultdict
 
 # Define the different AWS accounts/clusters
 accounts = [
-    {
-        'name': 'dev',
-        'region': 'us-east-1'
-    },
-    {
-        'name': 'idev',
-        'region': 'us-east-1'
-    },
-    {
-        'name': 'intg',
-        'region': 'us-east-1'
-    },
-    {
-        'name': 'accp',
-        'region': 'us-east-1'
-    },
-    {
-        'name': 'prod',
-        'region': 'us-east-1'
-    },
+    {'name': 'dev', 'region': 'us-east-1'},
+    {'name': 'idev', 'region': 'us-east-1'},
+    {'name': 'intg', 'region': 'us-east-1'},
+    {'name': 'accp', 'region': 'us-east-1'},
+    {'name': 'prod', 'region': 'us-east-1'}
 ]
 
-# Map environments to their corresponding suffixes
 env_to_suffix_map = {
     'dev': ['dev', 'devb', 'devc'],
     'intg': ['intg', 'intgb', 'intgc'],
     'accp': ['accp', 'accpb', 'accpc'],
-    'prod': ['proda', 'prodb'],
+    'prod': ['proda', 'prodb']
 }
 
+
 def set_aws_credentials(environment):
-    """
-    Dynamically set AWS credentials in the environment for the given environment.
-    """
     os.environ['AWS_ACCESS_KEY_ID'] = os.getenv(f'{environment}_AWS_ACCESS_KEY_ID')
     os.environ['AWS_SECRET_ACCESS_KEY'] = os.getenv(f'{environment}_AWS_SECRET_ACCESS_KEY')
     os.environ['AWS_SESSION_TOKEN'] = os.getenv(f'{environment}_AWS_SESSION_TOKEN')  # Optional
@@ -52,8 +34,10 @@ def set_aws_credentials(environment):
 
     print(f"Using credentials for environment: {environment}")
 
+
 def get_aws_session(region):
     return boto3.Session(region_name=region)
+
 
 def get_clusters(aws_session):
     eks_client = aws_session.client('eks')
@@ -64,13 +48,13 @@ def get_clusters(aws_session):
         print(f"Error fetching clusters for region {aws_session.region_name}: {e}")
         return []
 
+
 def get_nodes_and_metrics(cluster_name, aws_session):
     nodes = []
     account_id = aws_session.client('sts').get_caller_identity()['Account']
     context = f'arn:aws:eks:{aws_session.region_name}:{account_id}:cluster/{cluster_name}'
 
     cmd = f"kubectl get nodes --context={context} -o jsonpath='{{{{range .items[*]}}}}{{{{.metadata.name}}}}|{{{{.status.capacity.cpu}}}}|{{{{.status.capacity.memory}}}} {{{{end}}}}'"
-
     try:
         node_info = subprocess.check_output(cmd, shell=True).decode('utf-8').strip().split()
     except subprocess.CalledProcessError as e:
@@ -122,6 +106,7 @@ def get_nodes_and_metrics(cluster_name, aws_session):
 
     return nodes
 
+
 def get_pods_and_metrics(cluster_name, aws_session):
     pods = []
     namespace_counts = {}
@@ -157,10 +142,6 @@ def get_pods_and_metrics(cluster_name, aws_session):
     return pods, namespace_counts
 
 def count_pods_by_suffixes(namespace_counts, suffixes):
-    """
-    Counts the total number of pods for namespaces that end with given suffixes.
-    Returns a dict mapping suffixes to counts, and 'others' to the count of namespaces that do not end with any of the suffixes.
-    """
     counts = {suffix: 0 for suffix in suffixes}
     counts['others'] = 0
 
@@ -176,7 +157,6 @@ def count_pods_by_suffixes(namespace_counts, suffixes):
     return counts
 
 def generate_html_report(clusters_info, current_env):
-    # Generate a timestamp
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
     template = """
@@ -200,17 +180,10 @@ def generate_html_report(clusters_info, current_env):
     </head>
     <body>
         <h1>EKS Clusters Dashboard</h1>
-
         <div class="timestamp">Report generated on: {{ timestamp }}</div>
-
-        <div>
-            <label for="env-select">Select Environment: </label>
-            <select id="env-select" onchange="changeEnvironment()">
-                {% for account in accounts %}
-                <option value="{{ account.name }}" {% if account.name == current_env %}selected{% endif %}>{{ account.name }}</option>
-                {% endfor %}
-            </select>
-        </div>
+        <p>Total Clusters: {{ total_clusters }}</p>
+        <p>Total Nodes: {{ total_nodes }}</p>
+        <p>Total Pods: {{ total_pods }}</p>
 
         {% if current_env != 'idev' %}
         <h3>Total Pods by Namespace Suffix</h3>
@@ -237,10 +210,6 @@ def generate_html_report(clusters_info, current_env):
         {% else %}
         <p>Total Pods: {{ counts_by_suffix['total_pods'] }}</p>
         {% endif %}
-
-        <p>Total Clusters: {{ total_clusters }}</p>
-        <p>Total Nodes: {{ total_nodes }}</p>
-        <p>Total Pods: {{ total_pods }}</p>
 
         <h3>Cluster Summary (Total Nodes & Pods per Cluster)</h3>
         <table>
@@ -366,16 +335,13 @@ def generate_html_report(clusters_info, current_env):
     </html>
     """
 
-    # Filter clusters for the current environment
     clusters_in_env = [cluster for cluster in clusters_info if cluster['account'] == current_env]
 
-    # Aggregate namespace counts
     aggregated_namespace_counts = defaultdict(int)
     for cluster in clusters_in_env:
         for namespace, count in cluster['namespace_counts'].items():
             aggregated_namespace_counts[namespace] += count
 
-    # Calculate counts by suffix
     if current_env != 'idev':
         suffixes = env_to_suffix_map.get(current_env, [])
         counts_by_suffix = count_pods_by_suffixes(aggregated_namespace_counts, suffixes)
@@ -383,18 +349,17 @@ def generate_html_report(clusters_info, current_env):
         total_pods = sum(aggregated_namespace_counts.values())
         counts_by_suffix = {'total_pods': total_pods}
 
-    # Calculate total clusters, nodes, and pods
     total_clusters = len(clusters_in_env)
     total_nodes = sum(len(cluster['nodes']) for cluster in clusters_in_env)
     total_pods = sum(len(cluster['pods_info']) for cluster in clusters_in_env)
 
-    # Add per-cluster total nodes and total pods
     for cluster in clusters_in_env:
         cluster['total_nodes'] = len(cluster['nodes'])
         cluster['total_pods'] = len(cluster['pods_info'])
 
     html_template = Template(template)
     html_content = html_template.render(
+        timestamp=timestamp,
         total_clusters=total_clusters,
         total_nodes=total_nodes,
         total_pods=total_pods,
@@ -403,29 +368,23 @@ def generate_html_report(clusters_info, current_env):
         current_env=current_env,
         counts_by_suffix=counts_by_suffix,
         suffixes=suffixes if current_env != 'idev' else [],
-        timestamp=timestamp
     )
 
     return html_content
 
+
 def lambda_handler(event, context):
-    # Default to 'dev' environment if not specified
     environment = event.get('queryStringParameters', {}).get('environment', 'dev')
-    
     clusters_info = []
 
     for account in accounts:
-        # Process only the selected environment
         if account['name'] != environment:
             continue
 
-        # Set AWS credentials for the current environment
         set_aws_credentials(account['name'])
-        
-        # Set up AWS sessions based on the selected environment
         session = get_aws_session(account['region'])
         clusters = get_clusters(session)
-        
+
         for cluster in clusters:
             nodes = get_nodes_and_metrics(cluster, session)
             pods_info, namespace_counts = get_pods_and_metrics(cluster, session)
@@ -435,27 +394,19 @@ def lambda_handler(event, context):
                 'region': account['region'],
                 'nodes': nodes,
                 'pods_info': pods_info,
-                'namespace_counts': namespace_counts  # Pass namespace counts to the template
+                'namespace_counts': namespace_counts
             })
 
-    # Generate the HTML report in real-time
     html_content = generate_html_report(clusters_info, environment)
-
     return {
         'statusCode': 200,
-        'headers': {
-            'Content-Type': 'text/html',
-        },
+        'headers': {'Content-Type': 'text/html'},
         'body': html_content
     }
 
+
 if __name__ == '__main__':
-    # Simulate a request for local testing
-    event = {
-        'queryStringParameters': {
-            'environment': 'dev'  # Default to 'dev'
-        }
-    }
+    event = {'queryStringParameters': {'environment': 'dev'}}
     result = lambda_handler(event, None)
     with open('eks_dashboard.html', 'w') as f:
         f.write(result['body'])
