@@ -28,7 +28,6 @@ accounts = [
         'name': 'prod',
         'region': 'us-east-1'
     },
-    # Add more accounts as needed
 ]
 
 # Map environments to their corresponding suffixes
@@ -37,7 +36,6 @@ env_to_suffix_map = {
     'intg': ['intg', 'intgb', 'intgc'],
     'accp': ['accp', 'accpb', 'accpc'],
     'prod': ['proda', 'prodb'],
-    # 'idev' does not have specific suffixes
 }
 
 def set_aws_credentials(environment):
@@ -142,50 +140,14 @@ def get_pods_and_metrics(cluster_name, aws_session):
         try:
             namespace, pod_name, node_name = pod.split('|')
 
-            # Increment the namespace count
             if namespace not in namespace_counts:
                 namespace_counts[namespace] = 0
             namespace_counts[namespace] += 1
-
-            # Get CPU utilization for the pod
-            cpu_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context={context} --no-headers | awk '{{{{print $2}}}}'"
-            try:
-                cpu_utilization_raw = subprocess.check_output(cpu_cmd, shell=True).decode('utf-8').strip()
-            except subprocess.CalledProcessError:
-                cpu_utilization_raw = '0'
-
-            if not cpu_utilization_raw:
-                print(f"Warning: No CPU utilization data for pod {pod_name} in namespace {namespace}. Skipping this pod.")
-                continue
-
-            if cpu_utilization_raw.endswith('m'):
-                cpu_utilization = int(cpu_utilization_raw[:-1]) / 1000  # Convert millicores to cores
-            else:
-                cpu_utilization = int(cpu_utilization_raw) if cpu_utilization_raw.isdigit() else 0
-
-            # Get memory utilization for the pod
-            memory_cmd = f"kubectl top pod {pod_name} --namespace={namespace} --context={context} --no-headers | awk '{{{{print $3}}}}'"
-            try:
-                memory_utilization = subprocess.check_output(memory_cmd, shell=True).decode('utf-8').strip()
-            except subprocess.CalledProcessError:
-                memory_utilization = '0Mi'
-
-            if not memory_utilization:
-                print(f"Warning: No memory utilization data for pod {pod_name} in namespace {namespace}. Skipping this pod.")
-                continue
-
-            memory_utilization_value = memory_utilization[:-2]
-            if memory_utilization_value.isdigit():
-                memory_utilization_gb = int(memory_utilization_value) / 1024  # Convert MiB to GB
-            else:
-                memory_utilization_gb = 0
 
             pods.append({
                 'namespace': namespace,
                 'name': pod_name,
                 'node_name': node_name,
-                'cpu_utilization': f"{cpu_utilization:.2f}",
-                'memory_utilization_gb': f"{memory_utilization_gb:.2f} GB",
             })
 
         except ValueError as e:
