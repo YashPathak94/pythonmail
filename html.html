@@ -1,0 +1,418 @@
+
+
+   
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EKS Dashboard</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+    <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 20px;
+                background-color: #ffffff;
+                color: black;
+                transition: all 0.3s ease;
+            }
+			
+			.custom-container {
+                padding: 0 5px;
+		    }
+			
+			.bg-dark {
+                background-color: #0396A8 !important;
+            }
+
+           .px-2 {
+               padding-left: 0.5rem !important;
+               padding-right: 0.5rem !important;
+            }
+			
+
+            h1 {
+                color: #007BFF;
+                text-align: center;
+                font-size: 36px;
+                margin-bottom: 30px;
+                font-weight: bold;
+            }
+
+            h2, h3 {
+                color: #0396A8;
+                margin-top: 50px;
+                font-size: 24px;
+                font-weight: bold;
+            }
+
+            .table-wrap {
+                white-space: normal;
+                word-break: break-word;
+            }
+            
+            .navbar {
+                padding: 8px;
+            }
+
+            th, td {
+                border: 1px solid #ddd;
+                padding: 8px;
+                text-align: left;
+                word-break: break-word;
+            }
+
+            th {
+                background-color: #007BFF;
+                color: white;
+                text-align: center;
+            }
+
+            p {
+                font-weight: bold;
+                color: black;
+                font-size: 16px;
+            }
+
+            .download-link {
+                margin-top: 20px;
+                display: inline-block;
+                font-size: 18px;
+                color: #007BFF;
+                text-decoration: none;
+                font-weight: bold;
+            }
+
+            .download-link:hover {
+                text-decoration: underline;
+            }
+
+            .gauge-container {
+                width: 100px;
+                height: 50px;
+                background: #e6e6e6;
+                border-radius: 5px;
+                position: relative;
+            }
+
+            .gauge-fill {
+                height: 100%;
+                border-radius: 5px;
+            }
+
+            .gauge-label {
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                font-weight: bold;
+                color: black;
+            }
+
+            .dropdown {
+                margin-bottom: 10px;
+            }
+
+            .env-selector {
+                margin-bottom: 20px;
+                text-align: center;
+                font-weight: bold;
+                color: black;
+            }
+
+            #env-select {
+                border: 2px solid black;
+                font-weight: bold;
+                padding: 5px;
+            }
+
+            .footer {
+                text-align: center;
+                margin-top: 50px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+
+            .footer span {
+                color: red;
+            }
+
+            .timestamp {
+                text-align: right;
+                font-size: 14px;
+                color: grey;
+                font-weight: bold;
+                margin-bottom: 20px;
+            }
+
+            .card:hover {
+                box-shadow: 2px 3px 7px -3px;
+            }
+
+            label {
+                font-weight: bold;
+            }
+
+            @media (max-width: 576px) {
+                h1 {
+                    font-size: 28px;
+                }
+
+                h2, h3 {
+                    font-size: 20px;
+                }
+
+                .gauge-container {
+                    width: 80px;
+                    height: 40px;
+                }
+
+                th, td {
+                    font-size: 12px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <!-- Navbar -->
+        <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+            <a class="navbar-brand" href="https://www.venerable.com/">
+                <img src="/basdashboard/images/venerable_logo.png" class="ven-logo" alt="venerable.com">
+            </a>
+            <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+        </nav>
+        <div class="container mt-4 custom-container">
+            <h1>Welcome to EKS Clusters Dashboard with VENERABLE</h1>
+
+            <div class="timestamp">Report generated on: {{ timestamp }}</div>
+
+            <div class="env-selector">
+                <label for="env-select">Select Environment: </label>
+                <select id="env-select" onchange="changeEnvironment()">
+                    {% for account in accounts %}
+                    <option value="{{ account.name }}" {% if account.name == current_env %}selected{% endif %}>{{ account.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+    
+            <p>Total Clusters: {{ total_clusters }}</p>
+            <p>Total Nodes: {{ total_nodes }}</p>
+            <p>Total Pods: {{ total_pods }}</p>
+    
+            <h3>Cluster Summary (Total Nodes & Pods per Cluster)</h3>
+            <table class="table table-bordered table-wrap text-white">
+                <thead>
+                    <tr>
+                        <th>Cluster Name</th>
+                        <th>Total Nodes</th>
+                        <th>Total Pods</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for cluster in clusters %}
+                    <tr>
+                        <td>{{ cluster.name }} ({{ cluster.account }})</td>
+                        <td>{{ cluster.total_nodes }}</td>
+                        <td>{{ cluster.total_pods }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+    
+            {% for cluster in clusters %}
+            <div class="cluster-section" id="cluster-{{ cluster.account }}" style="display: {% if cluster.account == current_env %}block{% else %}none{% endif %};">
+            <h2>{{ cluster.name }} ({{ cluster.account }} - {{ cluster.region }})</h2>
+    
+            <h3>Pods Count by Namespace Suffix</h3>
+            <table class="table table-bordered table-wrap text-white">
+                <thead>
+                    <tr>
+                        <th>Group</th>
+                        <th>Pod Count</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for group in cluster.group_order %}
+                    <tr>
+                        <td>{{ group }}</td>
+                        <td>{{ cluster.group_counts.get(group, 0) }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+    
+            <h3>Nodes Information</h3>
+            <table class="table table-bordered table-wrap text-white">
+                <thead>
+                    <tr>
+                        <th>Node Name</th>
+                        <th>CPU Capacity (vCPU)</th>
+                        <th>Memory Capacity (GB)</th>
+                        <th>CPU Utilization (%)</th>
+                        <th>Memory Utilization (GB)</th>
+                        <th>Memory Utilization (%)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for node in cluster.nodes %}
+                    <tr>
+                        <td>{{ node.name }}</td>
+                        <td>{{ node.cpu_capacity }}</td>
+                        <td>{{ node.memory_capacity_gb }}</td>
+                        <td>{{ node.cpu_utilization }}%</td>
+                        <td>{{ node.memory_utilization_gb }}</td>
+                        <td>
+                            <div class="gauge-container">
+                                <div class="gauge-fill" style="width: {{ node.memory_utilization_percentage }}%; background: {% if node.memory_utilization_percentage|float < 75 %}green{% else %}orange{% endif %};"></div>
+                                <div class="gauge-label">{{ node.memory_utilization_percentage }}%</div>
+                            </div>
+                        </td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+    
+            <h3>Pods Information by Namespace</h3>
+            <div class="dropdown">
+                <label for="namespace-select-{{ cluster.name }}">Select Namespace:</label>
+                <select id="namespace-select-{{ cluster.name }}" onchange="filterPods(this.value, '{{ cluster.name }}')">
+                    <option value="">Show All</option>
+                    {% for namespace in cluster.namespace_counts %}
+                    <option value="{{ namespace }}">{{ namespace }} ({{ cluster.namespace_counts[namespace] }} Pods)</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <table id="pod-table-{{ cluster.name }}" class="table table-bordered table-wrap text-white">
+                <thead>
+                    <tr>
+                        <th>Namespace</th>
+                        <th>Pod Name</th>
+                        <th>Node Name</th>
+                        <th>CPU Utilization (vCPU)</th>
+                        <th>Memory Utilization (GB)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for pod in cluster.pods_info %}
+                    <tr class="pod-row" data-namespace="{{ pod.namespace }}">
+                        <td>{{ pod.namespace }}</td>
+                        <td>{{ pod.name }}</td>
+                        <td>{{ pod.node_name }}</td>
+                        <td>{{ pod.cpu_utilization }}</td>
+                        <td>{{ pod.memory_utilization_gb }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+    
+            <h3>Maximum Utilization within Cluster</h3>
+            <div class="dropdown">
+                <label for="max-utilization-select-{{ cluster.name }}">Select Metric:</label>
+                <select id="max-utilization-select-{{ cluster.name }}" onchange="filterMaxUtilization(this.value, '{{ cluster.name }}')">
+                    <option value="cpu">Max CPU Utilization</option>
+                    <option value="memory">Max Memory Utilization</option>
+                </select>
+            </div>
+            <table id="max-utilization-table-{{ cluster.name }}" class="table table-bordered table-wrap text-white">
+                <thead>
+                    <tr>
+                        <th>Namespace</th>
+                        <th>Pod Name</th>
+                        <th>Node Name</th>
+                        <th>CPU Utilization (vCPU)</th>
+                        <th>Memory Utilization (GB)</th>
+                    </tr>
+                </thead>
+                <tbody id="max-utilization-body-{{ cluster.name }}">
+                {% set max_cpu_pods = cluster.pods_info | sort(attribute='cpu_utilization', reverse=True)[:5] %}
+                {% set max_memory_pods = cluster.pods_info | sort(attribute='memory_utilization_gb', reverse=True)[:5] %}
+                {% for pod in max_cpu_pods %}
+                <tr class="max-cpu-row">
+                    <td>{{ pod.namespace }}</td>
+                    <td>{{ pod.name }}</td>
+                    <td>{{ pod.node_name }}</td>
+                    <td>{{ pod.cpu_utilization }}</td>
+                    <td>{{ pod.memory_utilization_gb }}</td>
+                </tr>
+                {% endfor %}
+                {% for pod in max_memory_pods %}
+                <tr class="max-memory-row">
+                    <td>{{ pod.namespace }}</td>
+                    <td>{{ pod.name }}</td>
+                    <td>{{ pod.node_name }}</td>
+                    <td>{{ pod.cpu_utilization }}</td>
+                    <td>{{ pod.memory_utilization_gb }}</td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            {% endfor %}
+    
+            <a href="eks_report.html" download="eks_report.html" class="download-link">Download Report</a>
+
+        </div>
+    
+            <div class="footer">
+                Build with <span>❤️</span> VENERABLE
+            </div>    
+		<script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+
+        <script>
+            function changeEnvironment() {
+                const envSelect = document.getElementById('env-select');
+                const selectedEnv = envSelect.value;
+
+                // Hide all clusters
+                var clusters = document.getElementsByClassName('cluster-section');
+                for (var i = 0; i < clusters.length; i++) {
+                    clusters[i].style.display = 'none';
+                }
+
+                // Show the selected cluster
+                document.getElementById('cluster-' + selectedEnv).style.display = 'block';
+            }
+
+            function filterPods(namespace, clusterName) {
+                var table = document.getElementById('pod-table-' + clusterName);
+                var rows = table.getElementsByClassName('pod-row');
+                for (var i = 0; i < rows.length; i++) {
+                    var rowNamespace = rows[i].getAttribute('data-namespace');
+                    if (namespace === '' || namespace === rowNamespace) {
+                        rows[i].style.display = '';
+                    } else {
+                        rows[i].style.display = 'none';
+                    }
+                }
+            }
+
+            function filterMaxUtilization(metric, clusterName) {
+                var maxCpuRows = document.querySelectorAll('#max-utilization-table-' + clusterName + ' .max-cpu-row');
+                var maxMemoryRows = document.querySelectorAll('#max-utilization-table-' + clusterName + ' .max-memory-row');
+
+                if (metric === 'cpu') {
+                    for (let i = 0; i < maxCpuRows.length; i++) {
+                        maxCpuRows[i].style.display = '';
+                    }
+                    for (let i = 0; i < maxMemoryRows.length; i++) {
+                        maxMemoryRows[i].style.display = 'none';
+                    }
+                } else if (metric === 'memory') {
+                    for (let i = 0; i < maxCpuRows.length; i++) {
+                        maxCpuRows[i].style.display = 'none';
+                    }
+                    for (let i = 0; i < maxMemoryRows.length; i++) {
+                        maxMemoryRows[i].style.display = '';
+                    }
+                }
+            }
+        </script>
+    </body>
+    </html>
+    
