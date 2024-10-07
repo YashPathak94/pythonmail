@@ -30,12 +30,7 @@ accounts = [
     {
         'name': 'dr',
         'region': 'us-west-2',
-        'environment': 'dr',
-        'credentials': {
-            'AWS_ACCESS_KEY_ID': 'YOUR_DR_ACCESS_KEY_ID',
-            'AWS_SECRET_ACCESS_KEY': 'YOUR_DR_SECRET_ACCESS_KEY',
-            # 'AWS_SESSION_TOKEN': 'YOUR_DR_SESSION_TOKEN'  # Uncomment if needed
-        }
+        'environment': 'dr'  # 'dr' uses its own environment name
     },
     # Add more accounts as needed
 ]
@@ -54,11 +49,23 @@ def set_aws_credentials(account):
     """
     Dynamically set AWS credentials in the environment for the given account.
     """
-    if 'credentials' in account:
-        # Use credentials provided in the account dictionary
-        os.environ['AWS_ACCESS_KEY_ID'] = account['credentials'].get('AWS_ACCESS_KEY_ID')
-        os.environ['AWS_SECRET_ACCESS_KEY'] = account['credentials'].get('AWS_SECRET_ACCESS_KEY')
-        os.environ['AWS_SESSION_TOKEN'] = account['credentials'].get('AWS_SESSION_TOKEN', '')
+    if account['name'] == 'dr':
+        # Prompt user for AWS credentials
+        print(f"Please enter AWS credentials for the '{account['name']}' cluster:")
+        aws_access_key_id = input('AWS_ACCESS_KEY_ID: ').strip()
+        aws_secret_access_key = input('AWS_SECRET_ACCESS_KEY: ').strip()
+        aws_session_token = input('AWS_SESSION_TOKEN (leave blank if not applicable): ').strip()
+
+        os.environ['AWS_ACCESS_KEY_ID'] = aws_access_key_id
+        os.environ['AWS_SECRET_ACCESS_KEY'] = aws_secret_access_key
+        os.environ['AWS_SESSION_TOKEN'] = aws_session_token  # May be empty
+
+        if not aws_access_key_id or not aws_secret_access_key:
+            print(f"Warning: AWS credentials for '{account['name']}' are not set correctly.")
+            return False
+
+        print(f"Using credentials for environment: '{account['name']}'")
+        return True
     else:
         # Use environment variables
         environment = account['environment']
@@ -66,12 +73,12 @@ def set_aws_credentials(account):
         os.environ['AWS_SECRET_ACCESS_KEY'] = os.getenv(f'{environment}_AWS_SECRET_ACCESS_KEY')
         os.environ['AWS_SESSION_TOKEN'] = os.getenv(f'{environment}_AWS_SESSION_TOKEN', '')
 
-    if not os.environ.get('AWS_ACCESS_KEY_ID') or not os.environ.get('AWS_SECRET_ACCESS_KEY'):
-        print(f"Warning: AWS credentials for {account['name']} are not set correctly.")
-        return False
+        if not os.environ.get('AWS_ACCESS_KEY_ID') or not os.environ.get('AWS_SECRET_ACCESS_KEY'):
+            print(f"Warning: AWS credentials for '{account['name']}' are not set correctly.")
+            return False
 
-    print(f"Using credentials for environment: {account['name']}")
-    return True
+        print(f"Using credentials for environment: '{account['name']}'")
+        return True
 
 def get_aws_session(region):
     return boto3.Session(region_name=region)
@@ -91,10 +98,10 @@ def update_kubeconfig(cluster_name, region):
         # Pass the environment variables to the subprocess
         env = os.environ.copy()
         subprocess.check_output(cmd, shell=True, env=env)
-        print(f"Kubeconfig updated for cluster {cluster_name}")
+        print(f"Kubeconfig updated for cluster '{cluster_name}'")
         return True
     except subprocess.CalledProcessError as e:
-        print(f"Error updating kubeconfig for cluster {cluster_name}: {e.output.decode()}")
+        print(f"Error updating kubeconfig for cluster '{cluster_name}': {e.output.decode()}")
         return False
 
 def parse_cpu_utilization(cpu_utilization_raw):
@@ -128,7 +135,7 @@ def get_nodes_and_metrics(cluster_name):
         cmd = f"kubectl get nodes --context {cluster_name} -o jsonpath='{{range .items[*]}}{{.metadata.name}}|{{.status.capacity.cpu}}|{{.status.capacity.memory}} {{end}}'"
         node_info_output = subprocess.check_output(cmd, shell=True, env=env).decode('utf-8').strip()
         if not node_info_output:
-            print(f"No nodes found in cluster {cluster_name}")
+            print(f"No nodes found in cluster '{cluster_name}'")
             return nodes
 
         node_info = node_info_output.split()
@@ -176,7 +183,7 @@ def get_nodes_and_metrics(cluster_name):
             })
 
     except subprocess.CalledProcessError as e:
-        print(f"Error fetching nodes for cluster {cluster_name}: {e.output.decode()}")
+        print(f"Error fetching nodes for cluster '{cluster_name}': {e.output.decode()}")
 
     return nodes
 
@@ -198,7 +205,7 @@ def get_pods_and_metrics(cluster_name, environment):
         cmd = f"kubectl get pods --all-namespaces --context {cluster_name} -o jsonpath='{{range .items[*]}}{{.metadata.namespace}}|{{.metadata.name}}|{{.spec.nodeName}} {{end}}'"
         pod_info_output = subprocess.check_output(cmd, shell=True, env=env).decode('utf-8').strip()
         if not pod_info_output:
-            print(f"No pods found in cluster {cluster_name}")
+            print(f"No pods found in cluster '{cluster_name}'")
             return pods, namespace_counts, group_counts, group_order
 
         pod_info = pod_info_output.split()
@@ -249,14 +256,13 @@ def get_pods_and_metrics(cluster_name, environment):
                 continue
 
     except subprocess.CalledProcessError as e:
-        print(f"Error fetching pods for cluster {cluster_name}: {e.output.decode()}")
+        print(f"Error fetching pods for cluster '{cluster_name}': {e.output.decode()}")
 
     return pods, namespace_counts, group_counts, group_order
 
 def generate_html_report(clusters_info, current_env):
-    # [HTML template and rendering logic as before]
-    # Ensure that the HTML template is updated accordingly.
-    pass  # For brevity, I'm not including the HTML template here.
+    # [Your HTML template and rendering logic here]
+    pass  # Replace with your actual function code
 
 def lambda_handler(event, context):
     # Default to 'dev' environment if not specified
@@ -309,7 +315,4 @@ if __name__ == '__main__':
             'environment': 'dev'
         }
     }
-    result = lambda_handler(event, None)
-    with open('eks_dashboard.html', 'w') as f:
-        f.write(result['body'])
-    print("Dashboard HTML generated.")
+    lambda_handler(event, None)
