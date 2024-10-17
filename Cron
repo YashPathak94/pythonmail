@@ -1,0 +1,32 @@
+#!/bin/bash
+
+# Define full path to essential commands
+SED="/usr/bin/sed"
+CP="/bin/cp"
+SYSTEMCTL="/bin/systemctl"
+
+# Ensure the PATH is set for cron
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Define the path to the original index.html
+HTML_FILE="/home/a.802655/k8s-dashboard/index.html"
+TARGET_DIR="/var/www/html"
+
+# Get the current timestamp
+CURRENT_TIMESTAMP=$(date +"%Y%m%d%H%M%S")
+
+# Update the timestamp in the index.html file
+$SED -i "s|Report generated on:.*|Report generated on: $(date +"%Y-%m-%d %H:%M:%S EDT")|" $HTML_FILE
+
+# Create a timestamped copy of the index.html file
+TIMESTAMPED_FILE="/home/a.802655/k8s-dashboard/index-$CURRENT_TIMESTAMP.html"
+$CP $HTML_FILE $TIMESTAMPED_FILE
+
+# Copy the updated file to /var/www/html as the latest index.html
+sudo $CP $HTML_FILE $TARGET_DIR/index.html
+
+# Restart the httpd service
+sudo $SYSTEMCTL restart httpd
+
+# Log the operation
+echo "Cron executed at $(date): index.html updated and copied" >> /home/a.802655/k8s-dashboard/cron_log.txt
