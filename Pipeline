@@ -1,0 +1,37 @@
+pipeline {
+    agent {
+        node {
+            label 'jenkins-worker1'
+        }
+    }
+    environment {
+        FLYWAY_URL = 'jdbc:yourdatabaseurl' // Replace with your actual database URL
+        FLYWAY_USER = 'yourusername'       // Replace with your actual database username
+        FLYWAY_PASSWORD = 'yourpassword'   // Replace with your actual database password
+    }
+    stages {
+        stage('Checkout App Repo') {
+            steps {
+                git branch: 'dev', url: 'https://github.tools.vaapps.net/your-repo.git'
+            }
+        }
+        stage('Flyway Migration Steps') {
+            agent {
+                docker {
+                    image 'your-docker-repo/jenkins-linux-flyway:latest' // Replace with the built image's name
+                    registryUrl 'https://artifactory.tools.vaapps.net:5001/'
+                    reuseNode true
+                    args '-v ./flyway/sql:/flyway/sql -v ./flyway/conf:/flyway/conf'
+                }
+            }
+            steps {
+                sh 'flyway -locations=filesystem:/flyway/sql -configFiles=/flyway/conf/flyway.conf migrate'
+            }
+            post {
+                always {
+                    cleanWs()
+                }
+            }
+        }
+    }
+}
