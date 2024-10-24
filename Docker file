@@ -1,0 +1,32 @@
+# Use the specified base image
+FROM artifactory.tools.vaapps.net:5001/amazon-linux-2023:2023
+
+# Install necessary dependencies
+RUN dnf update -y && \
+    dnf install -y wget tar gzip sudo java-11-amazon-corretto && \
+    dnf clean all
+
+# Create Jenkins user and add to sudoers
+ARG user=jenkins
+ARG group=jenkins
+ARG uid=1000
+ARG gid=1000
+RUN groupadd -g ${gid} ${group} && \
+    useradd -u ${uid} -g ${gid} -m -s /bin/bash ${user} && \
+    echo "${user} ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+
+# Install Flyway
+RUN wget -O /tmp/flyway-commandline.tar.gz https://download.red-gate.com/maven/release/com/redgate/flyway/flyway-commandline/10.18.2/flyway-commandline-10.18.2-linux-x64.tar.gz && \
+    tar -xzf /tmp/flyway-commandline.tar.gz -C /opt && \
+    ln -s /opt/flyway-10.18.2 /opt/flyway && \
+    rm /tmp/flyway-commandline.tar.gz
+
+# Update PATH for Flyway
+ENV PATH="$PATH:/opt/flyway"
+
+# Set up the working directory for Jenkins user
+USER ${user}
+WORKDIR /home/jenkins
+
+# Verify Flyway installation
+RUN flyway -v
