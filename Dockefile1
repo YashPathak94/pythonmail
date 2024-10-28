@@ -17,3 +17,18 @@ RUN amazon-linux-extras enable docker && dnf install -y docker
 RUN dnf clean all
 
 # Continue with the rest of the Dockerfile...
+pipeline {
+    agent {
+        docker {
+            image 'docker-local/jenkins-linux-flyway'
+            args '-v ${WORKSPACE}/checkout-flyway/sql:/flyway/sql -v ${WORKSPACE}/checkout-flyway/conf:/flyway/conf'
+        }
+    }
+    stages {
+        stage('Run Flyway Migration') {
+            steps {
+                sh 'flyway -locations=filesystem:/flyway/sql -configFiles=/flyway/conf/flyway.toml -environment=devpoc migrate'
+            }
+        }
+    }
+}
