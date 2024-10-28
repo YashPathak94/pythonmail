@@ -1,0 +1,19 @@
+# Use specified base image
+FROM artifactory.tools.vaapps.net:5001/amazon-linux-2023:2023
+
+# Switch to root for installation
+USER root
+
+# Update and install dependencies one at a time
+RUN dnf update -y
+RUN dnf install -y sudo
+RUN dnf install -y git
+RUN dnf install -y unzip
+RUN dnf install -y tar
+RUN dnf install -y wget
+RUN dnf install -y curl
+RUN amazon-linux-extras enable python3.11 && dnf install -y python3.11
+RUN amazon-linux-extras enable docker && dnf install -y docker
+RUN dnf clean all
+
+# Continue with the rest of the Dockerfile...
