@@ -1,0 +1,38 @@
+pipeline {
+    agent any
+    environment {
+        DATABASE_URL = 'jdbc:redshift://your-redshift-url:5439/your_db'
+        DATABASE_USER = 'your_db_user'
+        DATABASE_PASSWORD = 'your_db_password'
+    }
+    stages {
+        stage('Checkout Code') {
+            steps {
+                // Check out code from your repository where Flyway configurations and SQL files are stored
+                git url: 'https://github.com/your-repo.git', branch: 'main'
+            }
+        }
+        stage('Run Flyway Migration') {
+            agent {
+                docker {
+                    // Replace with your Flyway Docker image
+                    image 'docker-local/jenkins-linux-flyway'
+                    args "-v ${env.WORKSPACE}/Drivers:/flyway/drivers -v ${env.WORKSPACE}/src:/flyway/sql -v ${env.WORKSPACE}/Configuration:/flyway/conf"
+                    reuseNode true
+                }
+            }
+            steps {
+                // Run Flyway migration command
+                sh """
+                flyway -configFiles=/flyway/conf/flyway.toml \
+                       -url=${DATABASE_URL} \
+                       -user=${DATABASE_USER} \
+                       -password=${DATABASE_PASSWORD} \
+                       -locations=filesystem:/flyway/sql \
+                       -environment=devpoc \
+                       migrate
+                """
+            }
+        }
+    }
+}
