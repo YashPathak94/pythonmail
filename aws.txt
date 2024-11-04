@@ -1,0 +1,38 @@
+Chronology of AWS Support Case for EFS Issue in EKS Environment
+1. Initial Investigation and Findings
+Issue Identified: EFS was missing Mount Targets, causing issues with StorageClass configuration.
+Action Taken: Updated the StorageClass yaml to point to the correct filesystem ID.
+Status: Configuration updated, but issue persisted.
+2. Testing and Persistent Issue
+Deployment Test: Jenkins deployment tested with corrected filesystem ID.
+Outcome: Pod stuck in "ContainerCreating" state.
+Logs Analysis: EFS CSI driver logs checked, no clear errors found.
+Next Step: Advised further testing and log monitoring.
+3. Further Debugging Steps Suggested by AWS
+Verbose Logging: Recommended enabling verbose/debug logging for EFS CSI driver.
+Instructions Provided:
+Enable debug logging for efs-utils.
+Deploy again to capture detailed logs.
+Goal: Gather more in-depth information to diagnose the issue.
+4. Manual Mounting Attempt and Troubleshooting
+Additional Steps: AWS advised manual EFS mounting to troubleshoot accessibility issues.
+Alternative Test: Suggested creating a “test” EFS to isolate and troubleshoot configuration issues.
+Objective: Verify if the existing EFS setup or a fresh setup could resolve the problem.
+5. Cluster Upgrade and Scaling Attempts
+Node Scaling: Increased the number of nodes to test resource availability.
+Cluster Upgrade: Upgraded EKS cluster to version 1.29.
+Result: Pod remained in "ContainerCreating" state.
+Conclusion: Issue may be related to configuration or connectivity, not resources.
+6. VolumeHandle Configuration and Access Points
+Investigation Outcome: PVs were pointing to the same folder in the EFS across pods.
+Suggested Solution: Configure unique access points for each PV to prevent mounting conflicts.
+Objective: Avoid ambiguity in Kubernetes volume handling.
+7. Final Recommendations and Next Steps
+Access Points Creation: Recommended adding more access points to the EFS.
+Configuration Update: Update PV yaml files to reference each new access point.
+Final Test: Redeploy with the new configuration and report results.
+AWS Support: Will continue monitoring and provide additional support if required.
+Summary of Actions and Next Steps
+Current Status: Issue under investigation; awaiting results of final test with updated access points.
+AWS Support Engagement: Active monitoring and readiness to escalate if the problem persists.
+Recommended Follow-Up: Schedule a review with AWS after deploying the updated configuration.
