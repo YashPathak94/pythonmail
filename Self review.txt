@@ -1,0 +1,33 @@
+Work Impact
+Efficient EKS Microservices Onboarding: I led the rapid onboarding of microservices on Amazon EKS for our project. By streamlining deployment workflows and optimizing resource allocation, I ensured that new services were integrated without delays, reducing time-to-market and enhancing productivity. This not only accelerated project timelines but also contributed to meeting strategic deadlines.
+
+Development of a Comprehensive EKS Dashboard: I designed and implemented a custom dashboard for EKS that consolidated all cluster metrics under a single interface. This dashboard provides real-time visibility into cluster performance, usage trends, and potential issues, empowering the team to monitor and manage resources more efficiently. As a result, it has improved decision-making and reduced response times to incidents.
+
+Enhanced Collaboration and Knowledge Sharing: By organizing regular training sessions and documentation updates, I facilitated team-wide familiarity with our EKS setup and best practices for microservices management. These sessions not only enhanced the team's technical expertise but also fostered a collaborative environment, ensuring that team members could seamlessly troubleshoot and manage the EKS infrastructure.
+
+Core Values
+Excellence:
+
+I maintained high standards in creating the EKS onboarding process, ensuring each service was deployed with stability, security, and scalability in mind.
+During the development of the EKS dashboard, I implemented rigorous testing and validation to ensure reliable and accurate metrics, reflecting a commitment to quality.
+By continuously monitoring and optimizing the EKS infrastructure, I upheld a disciplined approach to managing resources, contributing to the high performance of our systems.
+Customer-Driven:
+
+Understanding the criticality of smooth operations for our stakeholders, I proactively identified potential bottlenecks in the onboarding process and addressed them before they impacted timelines.
+I regularly collaborated with product and operations teams to customize the EKS dashboard features based on their feedback, ensuring it met user requirements effectively.
+My focus on real-time metric reporting and streamlined onboarding workflows directly supported the project’s goals, enabling us to deliver on customer expectations with precision.
+Agility:
+
+I stayed up-to-date with the latest advancements in EKS and DevOps practices, incorporating relevant updates into our infrastructure to maintain adaptability and efficiency.
+By automating repetitive tasks in the onboarding process, I reduced manual effort, allowing the team to pivot quickly and focus on more strategic initiatives.
+I introduced iterative improvements to the dashboard based on user feedback, demonstrating an agile approach to evolving the tool as the project’s needs changed.
+Expertise:
+
+Leveraging my DevOps background, I built the dashboard from scratch, rooted in an understanding of EKS’s complexities, to provide meaningful insights into our cluster performance.
+I regularly conducted workshops to share insights and best practices on EKS microservices management, fostering expertise across the team.
+My in-depth understanding of the EKS ecosystem enabled me to anticipate and mitigate issues before they escalated, showcasing my technical proficiency and proactive approach.
+Compassion:
+
+I made it a point to support colleagues facing challenges with the EKS onboarding process, offering guidance and troubleshooting assistance whenever needed.
+During high-stress situations, such as critical deployments, I maintained open communication and encouraged teamwork, helping to alleviate pressure and promote a supportive environment.
+I took into consideration feedback from various stakeholders when designing the dashboard, showing empathy towards user needs and creating a tool that truly benefits the team.
