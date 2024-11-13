@@ -1,0 +1,29 @@
+Issue Summary
+Problem: During the startup of the Tomcat-based application on a Docker container, the CPU utilization spikes significantly, reaching up to 159%. However, when starting the Docker container with only an interactive bash shell, CPU usage remains below 1%.
+
+Key Findings:
+
+The startup time of the application is delayed due to issues in the bootstrap process.
+A log entry indicates a problem with loading a JAR file (jolokia.jar) located in /opt/jws-6.0/tomcat/lib/. The file either does not exist or lacks read permissions, which may be causing repeated attempts or timeouts during the startup, contributing to high CPU usage.
+Potential Cause:
+
+File Access Issue: The application may be trying to load jolokia.jar repeatedly or timing out due to the missing or unreadable file, which could increase CPU utilization during these attempts.
+Inefficient Bootstrap Logic: The bootstrap process might have inefficient loops or retries for loading components, causing elevated CPU during startup.
+Next Steps:
+
+Verify File Existence and Permissions: Ensure that jolokia.jar exists in the specified directory and has the correct read permissions.
+Review Bootstrap Configuration: Check if there are fallback or retry mechanisms for loading resources and consider optimizing or disabling them for missing optional files.
+Compare with Interactive Mode: Since the container with bash shell shows minimal CPU usage, isolating application-specific startup routines could help identify areas needing optimization.
+This summary can help in discussions with the application team to further investigate and address the high CPU utilization issue. Let me know if you need additional assistance with troubleshooting steps or further analysis!
+
+
+
+
+
+
+
+
+
+
+
+
