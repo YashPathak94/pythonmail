@@ -1,111 +1,70 @@
+
+
 import os
 import subprocess
-import openpyxl
+import pandas as pd
 
-# Define EKS cluster details for idev
-EKS_CLUSTER = {
-    "cluster_name": "idev-cluster-name",
-    "region": "us-west-2",
-    "aws_access_key": "YOUR_IDEV_AWS_ACCESS_KEY",
-    "aws_secret_key": "YOUR_IDEV_AWS_SECRET_KEY"
+# Define idev cluster details
+IDEV_CLUSTER = {
+    "cluster_name": "your-idev-cluster",  # Replace with actual cluster name
+    "region": "us-west-2"  # Replace with actual region
 }
 
-EXCEL_FILE = "eks_pod_os_versions.xlsx"
-
-def set_aws_credentials(access_key, secret_key):
-    """Set AWS credentials dynamically."""
-    os.environ["AWS_ACCESS_KEY_ID"] = access_key
-    os.environ["AWS_SECRET_ACCESS_KEY"] = secret_key
-    print("AWS credentials set successfully.")
+EXCEL_FILE = "idev_pod_image_tags.xlsx"
 
 def switch_eks_cluster(cluster_name, region):
-    """Switch context to the given EKS cluster."""
-    command = [
-        "aws", "eks", "update-kubeconfig",
-        "--region", region,
-        "--name", cluster_name
-    ]
-    try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if result.returncode == 0:
-            print(f"Switched to {cluster_name}")
-            return True
-        else:
-            print(f"Failed to switch to {cluster_name}: {result.stderr.decode('utf-8').strip()}")
-            return False
-    except Exception as e:
-        print(f"Error switching cluster: {e}")
-        return False
+    """Switch to the idev EKS cluster using AWS CLI."""
+    command = f"aws eks update-kubeconfig --name {cluster_name} --region {region}"
+    subprocess.run(command, shell=True, check=True)
+    print(f"Switched to cluster: {cluster_name}")
 
-def get_application_namespaces():
-    """Fetch all namespaces, excluding system namespaces, using kubectl."""
+def get_all_namespaces():
+    """Fetch all namespaces excluding system namespaces."""
     try:
-        result = subprocess.run(["kubectl", "get", "ns", "-o", "jsonpath={.items[*].metadata.name}"],
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        namespaces = result.stdout.decode('utf-8').strip().split()
+        cmd = "kubectl get ns -o jsonpath='{.items[*].metadata.name}'"
+        result = subprocess.check_output(cmd, shell=True, text=True).strip()
+        
+        namespaces = result.split()
         excluded_ns = {"kube-system", "kube-public", "kube-node-lease"}
         return [ns for ns in namespaces if ns not in excluded_ns]
-    except Exception as e:
-        print(f"Error getting namespaces: {e}")
+    except subprocess.CalledProcessError as e:
+        print("Error getting namespaces:", e)
         return []
 
-def get_pods_in_namespace(namespace):
-    """Fetch all pods running in a given namespace using kubectl."""
+def get_pod_image_tags(namespace):
+    """Fetch pod names and their container image tags in a given namespace."""
     try:
-        result = subprocess.run(["kubectl", "get", "pods", "-n", namespace, "-o", "jsonpath={.items[*].metadata.name}"],
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return result.stdout.decode('utf-8').strip().split()
-    except Exception as e:
-        print(f"Error getting pods in {namespace}: {e}")
+        cmd_pods = f"kubectl get pods -n {namespace} -o jsonpath='{{.items[*].metadata.name}}'"
+        cmd_images = f"kubectl get pods -n {namespace} -o jsonpath='{{.items[*].spec.containers[*].image}}'"
+
+        pods = subprocess.check_output(cmd_pods, shell=True, text=True).strip().split()
+        images = subprocess.check_output(cmd_images, shell=True, text=True).strip().split()
+
+        # Extract only the tag part (after last ":")
+        image_tags = [img.split(":")[-1] if ":" in img else "latest" for img in images]
+
+        return list(zip([namespace] * len(pods), pods, image_tags))
+    except subprocess.CalledProcessError:
+        print(f"Error fetching pods/images in namespace: {namespace}")
         return []
-
-def get_pod_os_version(namespace, pod):
-    """Execute 'uname -r' inside a pod and return the OS version using kubectl."""
-    command = ["kubectl", "exec", "-n", namespace, pod, "--", "uname", "-r"]
-    try:
-        result = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        return result.stdout.decode('utf-8').strip()
-    except Exception as e:
-        return f"Error: {e}"
-
-def collect_cluster_data():
-    """Collect OS version data for all pods in the idev cluster."""
-    data = []
-
-    for namespace in get_application_namespaces():
-        for pod in get_pods_in_namespace(namespace):
-            os_version = get_pod_os_version(namespace, pod)
-            data.append([namespace, pod, os_version])
-
-    return data
-
-def save_to_excel(data):
-    """Save collected data into an Excel file."""
-    workbook = openpyxl.Workbook()
-    sheet = workbook.active
-    sheet.title = "idev"
-
-    # Write header
-    sheet.append(["Namespace", "Pod Name", "OS Version"])
-
-    # Write data rows
-    for row in data:
-        sheet.append(row)
-
-    workbook.save(EXCEL_FILE)
-    print(f"OS version details saved to {EXCEL_FILE}")
 
 def main():
-    set_aws_credentials(EKS_CLUSTER["aws_access_key"], EKS_CLUSTER["aws_secret_key"])
+    """Main function to collect pod image tags for all namespaces in idev cluster."""
+    switch_eks_cluster(IDEV_CLUSTER["cluster_name"], IDEV_CLUSTER["region"])
+    
+    all_data = []
 
-    if switch_eks_cluster(EKS_CLUSTER["cluster_name"], EKS_CLUSTER["region"]):
-        data = collect_cluster_data()
-        if data:
-            save_to_excel(data)
-        else:
-            print("No data collected.")
+    for namespace in get_all_namespaces():
+        all_data.extend(get_pod_image_tags(namespace))
+
+    # Convert data to DataFrame
+    df = pd.DataFrame(all_data, columns=["Namespace", "Pod Name", "Tag Version"])
+
+    # Save to Excel (single sheet)
+    df.to_excel(EXCEL_FILE, sheet_name="idev_cluster_pods", index=False)
+
+    print(f"Saved pod image tags to {EXCEL_FILE}")
 
 if __name__ == "__main__":
     main()
-
 
