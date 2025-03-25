@@ -6,7 +6,7 @@ import openpyxl
 
 # Define EKS cluster details for idev
 EKS_CLUSTER = {
-    "cluster_name": "venerable-eks-idev",
+    "cluster_name": "dev",
     "region": "us-west-2",
     "aws_access_key": "YOUR_ACCESS_KEY",
     "aws_secret_key": "YOUR_SECRET_KEY",
