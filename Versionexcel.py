@@ -1,4 +1,3 @@
-
 import subprocess
 import pandas as pd
 import os
@@ -22,7 +21,7 @@ subprocess.run(f"aws eks update-kubeconfig --region {REGION} --name {EKS_CLUSTER
 # Get all namespaces excluding system ones
 excluded_namespaces = ["kube-system", "kube-public", "kube-node-lease"]
 namespace_cmd = "kubectl get ns --no-headers -o custom-columns=':metadata.name'"
-namespace_output = subprocess.run(namespace_cmd, shell=True, capture_output=True, text=True)
+namespace_output = subprocess.run(namespace_cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
 all_namespaces = namespace_output.stdout.splitlines()
 filtered_namespaces = [ns for ns in all_namespaces if ns not in excluded_namespaces]
 
@@ -31,7 +30,7 @@ data = []
 # Loop through each namespace and get pod details
 for namespace in filtered_namespaces:
     cmd = f"kubectl get pods -n {namespace} -o jsonpath='{{range .items[*]}}{namespace}{{\" \"}}{{.metadata.name}}{{\" \"}}{{range .spec.containers[*]}}{{.image}}{{\"\\n\"}}{{end}}{{end}}'"
-    result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
     
     if result.stdout.strip():
         for line in result.stdout.strip().split("\n"):
@@ -47,3 +46,4 @@ output_file = "pod_image_tags.xlsx"
 df.to_excel(output_file, index=False)
 
 print(f"Excel file '{output_file}' generated successfully.")
+
