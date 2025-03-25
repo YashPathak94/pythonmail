@@ -1,70 +1,74 @@
 
 
-import os
+import boto3
 import subprocess
 import pandas as pd
 
-# Define idev cluster details
-IDEV_CLUSTER = {
-    "cluster_name": "your-idev-cluster",  # Replace with actual cluster name
-    "region": "us-west-2"  # Replace with actual region
-}
+# Function to retrieve AWS credentials dynamically
+def get_aws_credentials():
+    session = boto3.Session()  # Create a session
+    credentials = session.get_credentials()  # Get credentials
+    creds = credentials.get_frozen_credentials()  # Convert to a frozen form
 
-EXCEL_FILE = "idev_pod_image_tags.xlsx"
+    return {
+        "aws_access_key_id": creds.access_key,
+        "aws_secret_access_key": creds.secret_key,
+        "aws_session_token": creds.token
+    }
 
-def switch_eks_cluster(cluster_name, region):
-    """Switch to the idev EKS cluster using AWS CLI."""
-    command = f"aws eks update-kubeconfig --name {cluster_name} --region {region}"
-    subprocess.run(command, shell=True, check=True)
-    print(f"Switched to cluster: {cluster_name}")
+# Function to switch AWS credentials dynamically
+def set_aws_credentials():
+    creds = get_aws_credentials()
+    subprocess.run([
+        "export",
+        f"AWS_ACCESS_KEY_ID={creds['aws_access_key_id']}",
+        f"AWS_SECRET_ACCESS_KEY={creds['aws_secret_access_key']}",
+        f"AWS_SESSION_TOKEN={creds['aws_session_token']}"
+    ], shell=True, check=True)
+    print("AWS credentials set successfully.")
 
+# Function to get all namespaces from the cluster
 def get_all_namespaces():
-    """Fetch all namespaces excluding system namespaces."""
     try:
-        cmd = "kubectl get ns -o jsonpath='{.items[*].metadata.name}'"
-        result = subprocess.check_output(cmd, shell=True, text=True).strip()
-        
-        namespaces = result.split()
-        excluded_ns = {"kube-system", "kube-public", "kube-node-lease"}
-        return [ns for ns in namespaces if ns not in excluded_ns]
-    except subprocess.CalledProcessError as e:
-        print("Error getting namespaces:", e)
+        result = subprocess.run(["kubectl", "get", "namespaces", "-o", "jsonpath={.items[*].metadata.name}"], 
+                                capture_output=True, text=True, check=True)
+        namespaces = result.stdout.strip().split()
+        return namespaces
+    except Exception as e:
+        print(f"Error getting namespaces: {e}")
         return []
 
+# Function to get image tags from all pods in a given namespace
 def get_pod_image_tags(namespace):
-    """Fetch pod names and their container image tags in a given namespace."""
     try:
-        cmd_pods = f"kubectl get pods -n {namespace} -o jsonpath='{{.items[*].metadata.name}}'"
-        cmd_images = f"kubectl get pods -n {namespace} -o jsonpath='{{.items[*].spec.containers[*].image}}'"
-
-        pods = subprocess.check_output(cmd_pods, shell=True, text=True).strip().split()
-        images = subprocess.check_output(cmd_images, shell=True, text=True).strip().split()
-
-        # Extract only the tag part (after last ":")
+        result = subprocess.run(
+            ["kubectl", "get", "pods", "-n", namespace, "-o", "jsonpath={.items[*].spec.containers[*].image}"],
+            capture_output=True, text=True, check=True
+        )
+        images = result.stdout.strip().split()
         image_tags = [img.split(":")[-1] if ":" in img else "latest" for img in images]
-
-        return list(zip([namespace] * len(pods), pods, image_tags))
-    except subprocess.CalledProcessError:
-        print(f"Error fetching pods/images in namespace: {namespace}")
+        return image_tags
+    except Exception as e:
+        print(f"Error fetching image tags in namespace {namespace}: {e}")
         return []
 
+# Main function
 def main():
-    """Main function to collect pod image tags for all namespaces in idev cluster."""
-    switch_eks_cluster(IDEV_CLUSTER["cluster_name"], IDEV_CLUSTER["region"])
-    
-    all_data = []
+    set_aws_credentials()  # Set AWS credentials
 
-    for namespace in get_all_namespaces():
-        all_data.extend(get_pod_image_tags(namespace))
+    cluster_name = "idev-cluster"  # Change to your cluster name
+    namespaces = get_all_namespaces()
 
-    # Convert data to DataFrame
-    df = pd.DataFrame(all_data, columns=["Namespace", "Pod Name", "Tag Version"])
+    data = []
+    for namespace in namespaces:
+        image_tags = get_pod_image_tags(namespace)
+        for tag in image_tags:
+            data.append({"Namespace": namespace, "Tag Version": tag})
 
-    # Save to Excel (single sheet)
-    df.to_excel(EXCEL_FILE, sheet_name="idev_cluster_pods", index=False)
-
-    print(f"Saved pod image tags to {EXCEL_FILE}")
+    # Convert to DataFrame and save to Excel
+    df = pd.DataFrame(data)
+    df.to_excel("pod_image_tags.xlsx", index=False)
+    print("Excel file generated: pod_image_tags.xlsx")
 
 if __name__ == "__main__":
     main()
-
