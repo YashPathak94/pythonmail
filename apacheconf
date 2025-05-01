@@ -1,0 +1,133 @@
+# Apache + Entra (Azure AD) OIDC Setup
+
+This guide shows how to protect your static `index.html` under Apache HTTPD using **mod_auth_openidc** with Microsoft Entra ID (Azure AD), without any custom application.
+
+---
+
+## 1. Register your App in Azure AD (Entra)
+
+1. **Azure Portal → Azure Active Directory → App registrations → New registration**
+   - **Name:** `Dashboard-Apache-OIDC`
+   - **Supported account types:** Single-tenant (or your choice)
+   - **Redirect URI (Web):** `https://eks-dashboard.net/redirect_uri`
+2. **After creation**, note these three values:
+   - **Application (client) ID** → `AZURE_CLIENT_ID`
+   - **Directory (tenant) ID** → `AZURE_TENANT_ID`
+   - **Create a client secret** under **Certificates & secrets**, copy the value as `AZURE_CLIENT_SECRET`.
+3. **Expose API → Logout URL:** set to `https://eks-dashboard.net/logout`
+
+---
+
+## 2. Install `mod_auth_openidc`
+
+### Ubuntu/Debian
+```bash
+sudo apt-get update
+sudo apt-get install libapache2-mod-auth-openidc
+sudo a2enmod auth_openidc headers ssl
+```
+
+### RHEL/CentOS
+```bash
+yum install epel-release
+yum install mod_auth_openidc httpd mod_ssl
+```
+
+---
+
+## 3. Generate a Random Passphrase
+
+```bash
+openssl rand -base64 32 | sudo tee /etc/apache2/oidc-passphrase.txt
+sudo chmod 600 /etc/apache2/oidc-passphrase.txt
+```  
+Use this file’s contents as your `OIDCCryptoPassphrase`.
+
+---
+
+## 4. Configure Apache VirtualHost
+
+Create or edit `/etc/apache2/sites-available/eks-dashboard.conf` (Ubuntu) or `/etc/httpd/conf.d/eks-dashboard.conf` (RHEL):
+
+```apache
+<VirtualHost *:443>
+    ServerName eks-dashboard.net
+
+    # SSL Certificates
+    SSLEngine on
+    SSLCertificateFile      /etc/ssl/certs/eks-dashboard.crt
+    SSLCertificateKeyFile   /etc/ssl/private/eks-dashboard.key
+    # SSLCertificateChainFile /etc/ssl/certs/chain.pem  # if needed
+
+    # OIDC Settings
+    OIDCProviderMetadataURL https://login.microsoftonline.com/${AZURE_TENANT_ID}/v2.0/.well-known/openid-configuration
+    OIDCClientID            ${AZURE_CLIENT_ID}
+    OIDCClientSecret        ${AZURE_CLIENT_SECRET}
+    OIDCRedirectURI         https://eks-dashboard.net/redirect_uri
+    OIDCCryptoPassphrase    "$(sudo cat /etc/apache2/oidc-passphrase.txt)"
+
+    # Protect entire site
+    <Location "/">
+        AuthType openid-connect
+        Require valid-user
+    </Location>
+
+    # Logout handler
+    <Location "/logout">
+        AuthType openid-connect
+        Require valid-user
+        # After clearing session, redirect to Azure sign-out
+        Redirect "https://login.microsoftonline.com/${AZURE_TENANT_ID}/oauth2/v2.0/logout?post_logout_redirect_uri=https://eks-dashboard.net/"
+    </Location>
+
+    # Serve your static dashboard
+    DocumentRoot /var/www/html
+    <Directory /var/www/html>
+        Options Indexes FollowSymLinks
+        AllowOverride None
+        Require all granted
+    </Directory>
+
+    # Forward headers for correct redirect URIs
+    RequestHeader set X-Forwarded-Proto "https"
+    RequestHeader set X-Forwarded-Port  "443"
+
+    # Security headers
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+</VirtualHost>
+```
+
+> **Note:** Adjust certificate paths if different, and ensure DNS `eks-dashboard.net` points to this server.
+
+---
+
+## 5. Deploy and Enable
+
+1. **Place** your `index.html` (and any assets) into `/var/www/html/` on the Apache host.
+2. **Enable** the site (Ubuntu):
+   ```bash
+   sudo a2ensite eks-dashboard
+   sudo systemctl reload apache2
+   ```
+   On RHEL/CentOS:
+   ```bash
+   sudo systemctl restart httpd
+   ```
+3. **Test**: visit https://eks-dashboard.net/index.html → you should be redirected to the Microsoft login, then back to your dashboard.
+
+---
+
+## 6. (Optional) Display User Info
+
+To inject the signed‑in user’s email into your HTML requests:
+
+1. Add to the VirtualHost:
+   ```apache
+   OIDCRemoteUserClaim email
+   RequestHeader set X-User-Email "%{REMOTE_USER}e"
+   ```
+2. Modify your `index.html` to read this header via JavaScript or a tiny SSI include.
+
+---
+
+Your Apache server is now protected by Microsoft Entra OIDC, serving your static EKS dashboard at `/index.html`. Let me know if you need any further tweaks!
