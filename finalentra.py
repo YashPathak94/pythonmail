@@ -579,4 +579,79 @@ if __name__ == '__main__':
     with open('eks_dashboard.html', 'w') as f:
         f.write(result['body'])
     print("Dashboard HTML generated.")
+
+from flask import Flask, session, redirect, url_for, request, render_template, send_from_directory
+import msal
+import os
+
+app = Flask(__name__, static_folder='static', template_folder='templates')
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'replace-with-a-secure-random-value')
+
+# Azure AD / Entra OIDC settings
+CLIENT_ID = os.environ.get('AZURE_CLIENT_ID')
+CLIENT_SECRET = os.environ.get('AZURE_CLIENT_SECRET')
+TENANT_ID = os.environ.get('AZURE_TENANT_ID')
+AUTHORITY = f"https://login.microsoftonline.com/{TENANT_ID}"
+REDIRECT_PATH = '/getAToken'  # must match the redirect URI set in Entra
+SCOPE = ["openid", "profile", "email"]
+SESSION_TYPE = 'filesystem'  # token cache stored server-side
+
+@app.route('/')
+def index():
+    # If user not logged in, redirect to login
+    if not session.get('user'):
+        return redirect(url_for('login'))
+    # Serve your static dashboard
+    return send_from_directory(app.static_folder, 'index.html')
+
+@app.route('/login')
+def login():
+    # Create MSAL confidential client
+    msal_app = msal.ConfidentialClientApplication(
+        CLIENT_ID, authority=AUTHORITY,
+        client_credential=CLIENT_SECRET
+    )
+    # Build the auth request URL
+    auth_url = msal_app.get_authorization_request_url(
+        scopes=SCOPE,
+        redirect_uri=url_for('authorized', _external=True)
+    )
+    return redirect(auth_url)
+
+@app.route(REDIRECT_PATH)
+def authorized():
+    # Handle the response from Azure
+    code = request.args.get('code')
+    if not code:
+        return "Authorization failed.", 400
+
+    msal_app = msal.ConfidentialClientApplication(
+        CLIENT_ID, authority=AUTHORITY,
+        client_credential=CLIENT_SECRET
+    )
+    # Exchange code for token
+    result = msal_app.acquire_token_by_authorization_code(
+        code,
+        scopes=SCOPE,
+        redirect_uri=url_for('authorized', _external=True)
+    )
+    if 'access_token' in result:
+        # Store user info in session
+        session['user'] = {
+            'name': result.get('id_token_claims').get('name'),
+            'email': result.get('id_token_claims').get('email')
+        }
+        return redirect(url_for('index'))
+    else:
+        return "Could not acquire token: " + str(result.get('error_description')), 400
+
+@app.route('/logout')
+def logout():
+    # Clear session and redirect to Azure logout
+    session.clear()
+    logout_url = f"{AUTHORITY}/oauth2/v2.0/logout?post_logout_redirect_uri={url_for('index', _external=True)}"
+    return redirect(logout_url)
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=80)  # serve on HTTP port 80 inside EC2 container/instance
  
