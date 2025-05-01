@@ -1,4 +1,166 @@
+import os
+import sys
+import boto3
+import subprocess
+from jinja2 import Template
+from datetime import datetime
 from datetime import datetime, timezone
+
+# Define the different AWS accounts/environments
+accounts = [
+    {
+        'name': 'dev',
+        'region': 'us-east-1'
+    },
+    {
+        'name': 'intg',
+        'region': 'us-east-1'
+    },
+    {
+        'name': 'accp',
+        'region': 'us-east-1'
+    },
+    {
+        'name': 'prod',
+        'region': 'us-east-1'
+    },
+    # Add more accounts as needed
+]
+
+# Map environments to their corresponding suffixes
+env_to_suffix_map = {
+    'dev': ['dev', 'devb', 'devc'],
+    'intg': ['intg', 'intgb', 'intgc'],
+    'accp': ['accp', 'accpb', 'accpc'],
+    'prod': ['proda', 'prodb']
+}
+
+def set_aws_credentials(environment):
+    """
+    Dynamically set AWS credentials in the environment for the given environment.
+    """
+    access_key = os.getenv(f'{environment.upper()}_AWS_ACCESS_KEY_ID')
+    secret_key = os.getenv(f'{environment.upper()}_AWS_SECRET_ACCESS_KEY')
+    session_token = os.getenv(f'{environment.upper()}_AWS_SESSION_TOKEN')  # Optional
+
+    if not access_key or not secret_key:
+        print(f"Error: AWS credentials for {environment} are not set correctly.")
+        sys.exit(1)
+
+    os.environ['AWS_ACCESS_KEY_ID'] = access_key
+    os.environ['AWS_SECRET_ACCESS_KEY'] = secret_key
+    if session_token:
+        os.environ['AWS_SESSION_TOKEN'] = session_token
+
+    print(f"Using credentials for environment: {environment}")
+
+def get_aws_session(region):
+    return boto3.Session(region_name=region)
+
+def get_clusters(aws_session):
+    eks_client = aws_session.client('eks')
+    try:
+        clusters = eks_client.list_clusters()['clusters']
+        return clusters
+    except Exception as e:
+        print(f"Error fetching clusters for region {aws_session.region_name}: {e}")
+        return []
+
+def get_nodes_and_metrics(cluster_name, aws_session):
+    nodes = []
+    account_id = aws_session.client('sts').get_caller_identity()['Account']
+    context = f"arn:aws:eks:{aws_session.region_name}:{account_id}:cluster/{cluster_name}"
+    cmd = f"kubectl get nodes --context={context} -o jsonpath='{{range .items[*]}}{{.metadata.name}}|{{.status.capacity.cpu}}|{{.status.capacity.memory}} {{end}}'"
+
+    try:
+        node_info = subprocess.check_output(cmd, shell=True).decode('utf-8').strip().split()
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing kubectl command: {e}")
+        return nodes
+
+    for node in node_info:
+        node_details = node.split('|')
+        if len(node_details) != 3:
+            print(f"Unexpected node data format: {node_details}")
+            continue
+
+        node_name, cpu_capacity, memory_capacity = node_details
+        memory_capacity_gb = int(memory_capacity[:-2]) / 1024  # Convert MiB to GB
+
+        cpu_cmd = f"kubectl top node {node_name} --context={context} --no-headers | awk '{{print $2}}'"
+        try:
+            cpu_utilization_raw = subprocess.check_output(cpu_cmd, shell=True).decode('utf-8').strip()
+            if cpu_utilization_raw.endswith('m'):
+                cpu_utilization = int(cpu_utilization_raw[:-1]) / 1000  # Convert millicores to cores
+            else:
+                cpu_utilization = int(cpu_utilization_raw) if cpu_utilization_raw.isdigit() else 0
+        except subprocess.CalledProcessError:
+            cpu_utilization = 0
+
+        memory_cmd = f"kubectl top node {node_name} --context={context} --no-headers | awk '{{print $4}}'"
+        try:
+            memory_utilization = subprocess.check_output(memory_cmd, shell=True).decode('utf-8').strip()
+            memory_utilization_gb = int(memory_utilization[:-2]) / 1024 if memory_utilization[:-2].isdigit() else 0  # Convert MiB to GB
+        except subprocess.CalledProcessError:
+            memory_utilization_gb = 0
+
+        memory_utilization_percentage = (memory_utilization_gb / memory_capacity_gb) * 100 if memory_capacity_gb > 0 else 0
+
+        nodes.append({
+            'name': node_name,
+            'cpu_capacity': int(cpu_capacity),
+            'memory_capacity_gb': f"{int(memory_capacity_gb)} GB",
+            'cpu_utilization': f"{cpu_utilization:.2f}",
+            'memory_utilization_gb': f"{memory_utilization_gb:.2f} GB",
+            'memory_utilization_percentage': f"{memory_utilization_percentage:.2f}"
+        })
+
+    return nodes
+
+def get_pods_and_metrics(cluster_name, aws_session):
+    pods = []
+    namespace_counts = {}
+    account_id = aws_session.client('sts').get_caller_identity()['Account']
+    context = f"arn:aws:eks:{aws_session.region_name}:{account_id}:cluster/{cluster_name}"
+    cmd = f"kubectl get pods --all-namespaces --context={context} -o jsonpath='{{range .items[*]}}{{.metadata.namespace}}|{{.metadata.name}}|{{.spec.nodeName}} {{end}}'"
+
+    try:
+        pod_info = subprocess.check_output(cmd, shell=True).decode('utf-8').strip().split()
+    except subprocess.CalledProcessError as e:
+        print(f"Error executing kubectl command: {e}")
+        return pods, namespace_counts
+
+    for pod in pod_info:
+        try:
+            namespace, pod_name, node_name = pod.split('|')
+
+            # Increment the namespace count
+            if namespace not in namespace_counts:
+                namespace_counts[namespace] = 0
+            namespace_counts[namespace] += 1
+
+            pods.append({
+                'namespace': namespace,
+                'name': pod_name,
+                'node_name': node_name,
+            })
+
+        except ValueError as e:
+            print(f"Error processing pod: {e}")
+            continue
+
+    return pods, namespace_counts
+
+def count_pods_by_suffix(pods_info, selected_suffix):
+    """
+    Count total number of pods for namespaces that end with a given suffix.
+    """
+    total_pods = 0
+    for pod in pods_info:
+        namespace = pod['namespace']
+        if namespace.endswith(selected_suffix):
+            total_pods += 1
+    return total_pods
 
 def generate_html_report(clusters_info, current_env):
     # Generate a timestamp with the timezone (UTC in this case)
