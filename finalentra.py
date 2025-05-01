@@ -507,4 +507,76 @@ def generate_html_report(clusters_info, current_env):
     )
 
     return html_content
+
+def lambda_handler(event, context):
+    # Default to 'dev' environment and first suffix if not specified
+    query_params = event.get('queryStringParameters') or {}
+    environment = query_params.get('environment', 'dev').lower()
+    suffix = query_params.get('suffix')
+
+    # Ensure environment is valid
+    if environment not in env_to_suffix_map:
+        environment = 'dev'
+
+    # If suffix is not provided or not valid for the environment, default to first suffix
+    valid_suffixes = env_to_suffix_map[environment]
+    if not suffix or suffix not in valid_suffixes:
+        suffix = valid_suffixes[0]
+
+    clusters_info = []
+
+    # Find the account that matches the selected environment
+    account = next((acc for acc in accounts if acc['name'] == environment), None)
+    if account:
+        # Set AWS credentials for the current environment
+        set_aws_credentials(account['name'])
+
+        # Set up AWS session based on the selected environment
+        session = get_aws_session(account['region'])
+        clusters = get_clusters(session)
+
+        for cluster in clusters:
+            nodes = get_nodes_and_metrics(cluster, session)
+            pods_info, namespace_counts = get_pods_and_metrics(cluster, session)
+
+            # Filter pods based on the selected suffix
+            filtered_pods_info = [pod for pod in pods_info if pod['namespace'].endswith(suffix)]
+
+            clusters_info.append({
+                'name': cluster,
+                'account': account['name'],
+                'region': account['region'],
+                'nodes': nodes,
+                'pods_info': pods_info,  # All pods info
+                'filtered_pods_info': filtered_pods_info,  # Pods matching the selected suffix
+                'namespace_counts': namespace_counts  # All namespace counts
+            })
+
+    else:
+        print(f"No account found for environment: {environment}")
+        sys.exit(1)
+
+    # Generate the HTML report in real-time
+    html_content = generate_html_report(clusters_info, environment, suffix)
+
+    return {
+        'statusCode': 200,
+        'headers': {
+            'Content-Type': 'text/html',
+        },
+        'body': html_content
+    }
+
+if __name__ == '__main__':
+    # Simulate a request for local testing
+    event = {
+        'queryStringParameters': {
+            'environment': 'dev',  # Default to 'dev'
+            'suffix': 'dev'  # Default to 'dev'
+        }
+    }
+    result = lambda_handler(event, None)
+    with open('eks_dashboard.html', 'w') as f:
+        f.write(result['body'])
+    print("Dashboard HTML generated.")
  
