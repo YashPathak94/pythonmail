@@ -180,3 +180,35 @@ Conclusion
 SDLC is a time-tested framework that brings discipline, structure, and efficiency to software development projects. Its benefits extend beyond traditional application development and are increasingly relevant in the era of DevOps and Infrastructure as Code. Whether you’re building a microservice or provisioning an entire cloud infrastructure using AWS CloudFormation, adopting SDLC principles ensures that your process is repeatable, scalable, and aligned with business goals.
 
 By following the SDLC model, organizations reduce risk, enhance quality, and accelerate delivery — which is especially valuable in today’s fast-paced software and cloud-native development environments.
+
+
+viac-ddcs/
+├── root-stack/
+│   └── viac-ddcs-root-stack.yaml
+├── infrastructure/
+│   └── viac-ddcs-infrastructure.yaml
+├── security/
+│   └── viac-ddcs-security.yaml
+├── permissions/
+│   └── viac-ddcs-permissions.yaml
+├── s3/
+│   └── viac-s3-code-deploy.yaml
+├── outputs/
+│   └── viac-ddcs-outputs.yaml (optional for cross-stack references)
+└── parameters/
+    └── viac-ddcs-params.json
+
+
+
+
+[
+  {
+    "ParameterKey": "ProjectName",
+    "ParameterValue": "viac-ddcs-v1"
+  },
+  {
+    "ParameterKey": "EnvironmentType",
+    "ParameterValue": "dev"
+  }
+]
+
