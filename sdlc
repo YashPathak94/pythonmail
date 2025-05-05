@@ -1,0 +1,182 @@
+What is SDLC?
+The Software Development Life Cycle (SDLC) is a structured process used by software developers and project managers to design, develop, test, and deploy software systems efficiently and systematically. It defines the stages involved in the development of software from the initial feasibility study through maintenance of the completed application. SDLC ensures that software meets or exceeds customer expectations, is completed within time and cost estimates, and is developed using systematic, structured processes.
+
+Purpose of SDLC
+The core objective of SDLC is to produce high-quality software that meets customer expectations. It provides a methodical approach that ensures clarity, predictability, and efficiency throughout the development cycle. It helps eliminate costly rework by identifying problems early and ensuring stakeholder alignment.
+
+Phases of SDLC
+The SDLC process typically consists of the following seven phases:
+
+1. Requirement Gathering and Analysis
+In this phase, the business needs are identified and documented. Business analysts or project managers collaborate with stakeholders to gather functional and non-functional requirements.
+
+Activities:
+
+Understanding customer goals
+
+Documenting requirements
+
+Feasibility study (technical, operational, financial)
+
+Outcome: A clear, approved Software Requirements Specification (SRS) document.
+
+2. Planning
+The planning phase involves defining the scope, estimating costs, identifying resources, and preparing a project schedule. Project managers evaluate risks and create mitigation strategies.
+
+Activities:
+
+Resource allocation
+
+Time and cost estimation
+
+Risk management
+
+Outcome: A project plan and risk assessment report.
+
+3. System Design
+In this phase, the requirements are translated into a blueprint for building the software. Architects and designers create system designs, UI/UX mockups, and database schemas.
+
+Activities:
+
+High-level design (architecture)
+
+Low-level design (modules and interfaces)
+
+UI/UX planning
+
+Database design
+
+Outcome: Design Document Specification (DDS) or system architecture document.
+
+4. Development
+The actual coding of the application takes place in this phase. Developers write code based on the previously prepared design documents.
+
+Activities:
+
+Source code development
+
+Code versioning and control
+
+Following coding standards and guidelines
+
+Outcome: A functional software application or module ready for testing.
+
+5. Testing
+After the development phase, the product enters the testing phase, where the QA team validates the system against requirements.
+
+Activities:
+
+Unit testing, integration testing, system testing
+
+Performance and security testing
+
+Bug tracking and fixing
+
+Outcome: A validated, quality-checked application ready for deployment.
+
+6. Deployment
+In this phase, the software is released to the production environment. It may be released in phases depending on the deployment strategy.
+
+Activities:
+
+Production release
+
+Rollback strategy definition
+
+User training and documentation
+
+Outcome: Software available to end users or customers.
+
+7. Maintenance and Support
+Post-deployment, the application may require updates, performance tuning, or bug fixes. Ongoing maintenance ensures the software continues to perform as expected.
+
+Activities:
+
+Monitoring performance
+
+Bug fixes and patches
+
+Feature enhancements
+
+Outcome: Stable, reliable software that evolves over time.
+
+Common SDLC Models
+Several SDLC models guide the flow of activities. Some commonly used ones include:
+
+1. Waterfall Model
+Sequential flow
+
+Each phase must be completed before the next begins
+
+Suitable for small or well-understood projects
+
+2. Agile Model
+Iterative and incremental
+
+Emphasizes collaboration and customer feedback
+
+Suitable for dynamic or evolving requirements
+
+3. V-Model
+Extension of Waterfall with simultaneous testing for each development stage
+
+Strong validation and verification focus
+
+4. Spiral Model
+Risk-driven, iterative model
+
+Combines elements of design and prototyping
+
+5. Iterative Model
+Starts with a simple implementation and improves in successive cycles
+
+Flexible and adaptable to changes
+
+Benefits of SDLC
+Implementing SDLC provides a wide range of benefits:
+
+✅ Predictability
+A clear sequence of activities and deliverables improves predictability of timelines, costs, and outcomes.
+
+✅ Risk Management
+Identifying risks early helps in proactive planning and minimizes downstream issues.
+
+✅ Quality Assurance
+Testing at multiple levels ensures higher quality and reduces post-deployment issues.
+
+✅ Improved Communication
+Stakeholders are aligned through clearly documented requirements, designs, and progress tracking.
+
+✅ Resource Optimization
+Time and cost estimates ensure better resource management and avoid overruns.
+
+Modern Application: SDLC in Infrastructure as Code (IaC)
+In recent years, SDLC practices have extended to Infrastructure as Code (IaC), where infrastructure is provisioned and managed using code — for example, using AWS CloudFormation Templates (CFTs).
+
+Applying SDLC to CFTs includes:
+
+Planning modular stacks (e.g., network, IAM, S3, Lambda as separate templates)
+
+Implementing version control (Git)
+
+Validating with cfn-lint, taskcat
+
+Testing with sandbox environments
+
+Deploying using CI/CD pipelines (CodePipeline, Jenkins, GitHub Actions)
+
+Monitoring with AWS CloudWatch or drift detection
+
+Why SDLC is Crucial for CFT Projects
+Consistency: Modular and reusable templates reduce duplication and promote best practices.
+
+Automation: CI/CD pipelines ensure faster and safer deployments.
+
+Traceability: Version control systems allow rollback, history tracking, and audits.
+
+Collaboration: Clear responsibilities across teams (DevOps, Security, Architects).
+
+Conclusion
+SDLC is a time-tested framework that brings discipline, structure, and efficiency to software development projects. Its benefits extend beyond traditional application development and are increasingly relevant in the era of DevOps and Infrastructure as Code. Whether you’re building a microservice or provisioning an entire cloud infrastructure using AWS CloudFormation, adopting SDLC principles ensures that your process is repeatable, scalable, and aligned with business goals.
+
+By following the SDLC model, organizations reduce risk, enhance quality, and accelerate delivery — which is especially valuable in today’s fast-paced software and cloud-native development environments.
