@@ -1,149 +1,167 @@
+
 import boto3
-from datetime import datetime, timezone
-from jinja2 import Template
+from datetime import datetime
+from botocore.exceptions import ClientError
 
-# ----------- CONFIGURATION -----------
-REGION = 'us-east-1'
-CERT_DOMAIN_FILTER = "*.dev.vapps.net"
-SECRET_PREFIX_FILTER = "bas-chain"
+# Configuration for multiple AWS accounts using credentials
+accounts = {
+    "dev": {
+        "aws_access_key_id": "REPLACE_WITH_DEV_ACCESS_KEY",
+        "aws_secret_access_key": "REPLACE_WITH_DEV_SECRET_KEY",
+        "aws_session_token": "REPLACE_WITH_DEV_SESSION_TOKEN",
+        "region": "us-east-1",
+        "domain_filter": "*.dev.vapps.net",
+        "secret_prefix": "bas-chain"
+    },
+    "intg": {
+        "aws_access_key_id": "REPLACE_WITH_INTG_ACCESS_KEY",
+        "aws_secret_access_key": "REPLACE_WITH_INTG_SECRET_KEY",
+        "aws_session_token": "REPLACE_WITH_INTG_SESSION_TOKEN",
+        "region": "us-east-1",
+        "domain_filter": "*.intg.vapps.net",
+        "secret_prefix": "bas-chain"
+    },
+    "accp": {
+        "aws_access_key_id": "REPLACE_WITH_ACCP_ACCESS_KEY",
+        "aws_secret_access_key": "REPLACE_WITH_ACCP_SECRET_KEY",
+        "aws_session_token": "REPLACE_WITH_ACCP_SESSION_TOKEN",
+        "region": "us-east-1",
+        "domain_filter": "*.accp.vapps.net",
+        "secret_prefix": "bas-chain"
+    },
+    "prod": {
+        "aws_access_key_id": "REPLACE_WITH_PROD_ACCESS_KEY",
+        "aws_secret_access_key": "REPLACE_WITH_PROD_SECRET_KEY",
+        "aws_session_token": "REPLACE_WITH_PROD_SESSION_TOKEN",
+        "region": "us-east-1",
+        "domain_filter": "*.prod.vapps.net",
+        "secret_prefix": "bas-chain"
+    }
+}
 
-# ----------- FETCH ACM CERTIFICATES -----------
-def fetch_acm_certificates():
-    acm = boto3.client('acm', region_name=REGION)
-    paginator = acm.get_paginator('list_certificates')
-    cert_details = []
+def format_date(dt):
+    return dt.strftime('%Y-%m-%d') if dt else "-"
 
-    for page in paginator.paginate():
+def fetch_acm_data(session, region, domain_filter):
+    acm_client = session.client('acm', region_name=region)
+    certificates_data = []
+
+    paginator = acm_client.get_paginator('list_certificates')
+    for page in paginator.paginate(CertificateStatuses=['ISSUED']):
         for cert_summary in page['CertificateSummaryList']:
-            arn = cert_summary['CertificateArn']
-            cert = acm.describe_certificate(CertificateArn=arn)['Certificate']
+            cert_arn = cert_summary['CertificateArn']
+            try:
+                cert_details = acm_client.describe_certificate(CertificateArn=cert_arn)['Certificate']
+                domain_name = cert_details.get('DomainName')
+                if domain_filter.replace("*", "") not in domain_name:
+                    continue
 
-            if CERT_DOMAIN_FILTER not in cert['DomainName']:
+                cert_data = {
+                    'DomainName': domain_name,
+                    'Status': cert_details.get('Status'),
+                    'Type': cert_details.get('Type'),
+                    'RequestedAt': format_date(cert_details.get('CreatedAt')),
+                    'ImportedAt': format_date(cert_details.get('ImportedAt')),
+                    'IssuedAt': format_date(cert_details.get('IssuedAt')),
+                    'NotAfter': format_date(cert_details.get('NotAfter')),
+                    'RenewalEligibility': cert_details.get('RenewalEligibility', "-"),
+                    'InUseBy': cert_details.get('InUseBy', [])
+                }
+                certificates_data.append(cert_data)
+            except ClientError:
                 continue
+    return certificates_data
 
-            associated_resources = cert.get("InUseBy", [])
-            cert_details.append({
-                "DomainName": cert.get('DomainName'),
-                "Status": cert.get('Status'),
-                "Type": cert.get('Type'),
-                "IssuedAt": cert.get('IssuedAt', ''),
-                "ImportedAt": cert.get('ImportedAt', ''),
-                "NotAfter": cert.get('NotAfter', ''),
-                "RequestedAt": cert.get('CreatedAt', ''),
-                "RenewalEligibility": cert.get('RenewalEligibility', 'N/A'),
-                "InUseBy": associated_resources
-            })
+def fetch_secrets_data(session, region, secret_prefix):
+    secrets_client = session.client('secretsmanager', region_name=region)
+    secrets_data = []
 
-    return cert_details
-
-# ----------- FETCH SECRETS MANAGER DETAILS -----------
-def fetch_secrets_details():
-    secrets_client = boto3.client('secretsmanager', region_name=REGION)
     paginator = secrets_client.get_paginator('list_secrets')
-    secrets_info = []
-
     for page in paginator.paginate():
         for secret in page['SecretList']:
-            name = secret['Name']
-            if not name.startswith(SECRET_PREFIX_FILTER):
+            if not secret['Name'].startswith(secret_prefix):
                 continue
+            try:
+                details = secrets_client.describe_secret(SecretId=secret['ARN'])
+                secret_data = {
+                    'Name': details['Name'],
+                    'RotationEnabled': "Yes" if details.get('RotationEnabled') else "No",
+                    'Versions': f"{len(details.get('VersionIdsToStages', {}))} versions",
+                    'ReplicationRegions': ", ".join([r['Region'] for r in details.get('ReplicationStatus', [])]) or "-"
+                }
+                secrets_data.append(secret_data)
+            except ClientError:
+                continue
+    return secrets_data
 
-            desc = secrets_client.describe_secret(SecretId=name)
+def generate_html_report(all_data):
+    html = """<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>ACM Certificates & Secrets Dashboard</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        h2 { background-color: #f57c00; color: white; padding: 10px; }
+        table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #333; color: white; }
+        details summary { cursor: pointer; font-weight: bold; }
+        .section { margin-bottom: 50px; }
+    </style>
+</head>
+<body>
+    <h1>Multi-Account Dashboard: ACM Certificates & Secrets</h1>
+"""
+    for account, data in all_data.items():
+        html += f"""<div class="section">
+    <h2>{account.upper()} Account - ACM Certificates for {accounts[account]['domain_filter']}</h2>
+    <table>
+        <tr>
+            <th>Domain Name</th><th>Status</th><th>Type</th><th>Requested At</th><th>Imported At</th>
+            <th>Issued At</th><th>Expires At</th><th>Renewal Eligibility</th><th>In Use By</th>
+        </tr>"""
+        for cert in data['certs']:
+            html += f"""<tr>
+            <td>{cert['DomainName']}</td><td>{cert['Status']}</td><td>{cert['Type']}</td>
+            <td>{cert['RequestedAt']}</td><td>{cert['ImportedAt']}</td><td>{cert['IssuedAt']}</td>
+            <td>{cert['NotAfter']}</td><td>{cert['RenewalEligibility']}</td>
+            <td>
+                <details>
+                    <summary>{len(cert['InUseBy'])} resources</summary>
+                    <ul>"""
+            for item in cert['InUseBy']:
+                html += f"<li>{item}</li>"
+            html += "</ul></details></td></tr>"
 
-            rotation_enabled = desc.get("RotationEnabled", False)
-            versions = list(desc.get("VersionIdsToStages", {}).keys())
-            replication_status = desc.get("ReplicationStatus", [])
+        html += "</table><h2>Secrets: " + accounts[account]['secret_prefix'] + "*</h2><table>"
+        html += "<tr><th>Name</th><th>Rotation Enabled</th><th>Versions</th><th>Replication Regions</th></tr>"
+        for secret in data['secrets']:
+            html += f"<tr><td>{secret['Name']}</td><td>{secret['RotationEnabled']}</td><td>{secret['Versions']}</td><td>{secret['ReplicationRegions']}</td></tr>"
+        html += "</table></div>"
+    html += "</body></html>"
 
-            secrets_info.append({
-                "Name": name,
-                "RotationEnabled": rotation_enabled,
-                "Versions": versions,
-                "ReplicationStatus": replication_status
-            })
+    output_path = "acm_secrets_multi_account_dashboard.html"
+    with open(output_path, "w") as f:
+        f.write(html)
 
-    return secrets_info
+    print(f"Report saved to {output_path}")
 
-# ----------- GENERATE HTML DASHBOARD -----------
-def generate_html(certificates, secrets):
-    template_html = """
-    <html>
-    <head>
-        <title>Dev Account Certificate and Secret Dashboard</title>
-        <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            h2 { text-align: center; color: #2c3e50; }
-            table { border-collapse: collapse; width: 100%; margin-bottom: 40px; }
-            th, td { padding: 10px; text-align: left; border: 1px solid #ccc; }
-            th { background-color: #2c3e50; color: white; }
-            tr:nth-child(even) { background-color: #f2f2f2; }
-            .section-title { background-color: #f39c12; padding: 10px; color: white; font-weight: bold; }
-        </style>
-    </head>
-    <body>
-        <h2>Dev Account Dashboard: ACM Certificates & Secrets</h2>
+# Main Execution
+def main():
+    all_account_data = {}
+    for account, config in accounts.items():
+        session = boto3.Session(
+            aws_access_key_id=config['aws_access_key_id'],
+            aws_secret_access_key=config['aws_secret_access_key'],
+            aws_session_token=config['aws_session_token'],
+            region_name=config['region']
+        )
+        certs = fetch_acm_data(session, config['region'], config['domain_filter'])
+        secrets = fetch_secrets_data(session, config['region'], config['secret_prefix'])
+        all_account_data[account] = {"certs": certs, "secrets": secrets}
 
-        <div class="section-title">ACM Certificates for *.dev.vapps.net</div>
-        <table>
-            <tr>
-                <th>Domain Name</th>
-                <th>Status</th>
-                <th>Type</th>
-                <th>Requested At</th>
-                <th>Imported At</th>
-                <th>Issued At</th>
-                <th>Expires At</th>
-                <th>Renewal Eligibility</th>
-                <th>In Use By</th>
-            </tr>
-            {% for cert in certificates %}
-            <tr>
-                <td>{{ cert.DomainName }}</td>
-                <td>{{ cert.Status }}</td>
-                <td>{{ cert.Type }}</td>
-                <td>{{ cert.RequestedAt.strftime("%Y-%m-%d") if cert.RequestedAt else "" }}</td>
-                <td>{{ cert.ImportedAt.strftime("%Y-%m-%d") if cert.ImportedAt else "" }}</td>
-                <td>{{ cert.IssuedAt.strftime("%Y-%m-%d") if cert.IssuedAt else "" }}</td>
-                <td>{{ cert.NotAfter.strftime("%Y-%m-%d") if cert.NotAfter else "" }}</td>
-                <td>{{ cert.RenewalEligibility }}</td>
-                <td>{{ cert.InUseBy | join(', ') }}</td>
-            </tr>
-            {% endfor %}
-        </table>
+    generate_html_report(all_account_data)
 
-        <div class="section-title">Secrets: bas-chain*</div>
-        <table>
-            <tr>
-                <th>Name</th>
-                <th>Rotation Enabled</th>
-                <th>Versions</th>
-                <th>Replication Regions</th>
-            </tr>
-            {% for secret in secrets %}
-            <tr>
-                <td>{{ secret.Name }}</td>
-                <td>{{ "Yes" if secret.RotationEnabled else "No" }}</td>
-                <td>{{ secret.Versions | length }} versions</td>
-                <td>
-                    {% for rep in secret.ReplicationStatus %}
-                        {{ rep.Region }} ({{ rep.Status }})<br/>
-                    {% endfor %}
-                </td>
-            </tr>
-            {% endfor %}
-        </table>
-    </body>
-    </html>
-    """
-    template = Template(template_html)
-    return template.render(certificates=certificates, secrets=secrets)
-
-# ----------- MAIN EXECUTION -----------
 if __name__ == "__main__":
-    certs = fetch_acm_certificates()
-    secrets = fetch_secrets_details()
-    html_output = generate_html(certs, secrets)
-
-    with open("dev_acm_secrets_dashboard.html", "w") as f:
-        f.write(html_output)
-
-    print("✅ Dashboard generated: dev_acm_secrets_dashboard.html")
+    main()
