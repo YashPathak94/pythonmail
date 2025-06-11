@@ -51,3 +51,57 @@ Proactively identify and resolve performance bottlenecks.
 Optimize resources to maintain cost efficiency.
 Ensure consistent performance across different environments.
 This unified approach to monitoring improves operational visibility, enhances decision-making, and empowers teams to maintain robust and scalable Kubernetes ecosystems effectively.
+
+ChatGPT
+You said:
+Uploaded image
+Help me to change the name from sukriti mishra to Yash Pathak
+ChatGPT said:
+
+Image created
+Generated image
+Generated image
+Generated image
+
+
+
+Share
+You said:
+Help me to create chronology report for incident of node replacement in eks cluster where node auto repair is implemented, and how it helped the pod to spawned on new node and one replica of pod being run on other node ensuring no downtime 
+ChatGPT said:
+Here’s a chronology report template for an incident involving node replacement in an EKS cluster with node auto-repair enabled. This report explains how the system responded automatically, ensuring high availability and zero downtime:
+
+🗂️ Chronology Report: EKS Node Replacement Incident
+Incident Title: Automatic Node Replacement via Node Auto-Repair in EKS
+Environment: EKS Cluster - prod-us-east-1
+Date: 10 June 2025
+Time (IST): 03:15 PM – 03:45 PM
+Impact: No downtime observed, application remained fully available
+Auto Repair Mechanism: Enabled via Managed Node Group with Node Auto-Replacement
+
+⏱️ Timeline of Events
+Time (IST)	Event
+03:15 PM	Node ip-10-0-1-24.ec2.internal reported NotReady for 5+ minutes.
+03:16 PM	EKS Cluster detected node as unhealthy via node health checks.
+03:17 PM	Auto-repair triggered termination of the unhealthy node.
+03:19 PM	New EC2 instance initiated by the node group to replace the node.
+03:23 PM	New node joined the cluster and became Ready.
+03:24 PM	Kubernetes scheduler detected unscheduled pods and assigned them to the new node.
+03:25 PM	One replica of the critical application pod was already running on a healthy node.
+03:26 PM	Second replica successfully scheduled and running on the new node.
+03:30 PM	All pods reported Running status with no errors.
+03:45 PM	Incident closed. No alerts triggered from external monitoring systems.
+✅ Auto-Repair Benefits Observed
+Self-Healing: The unhealthy node was automatically replaced without manual intervention.
+
+High Availability Maintained: Due to ReplicaSet, at least one replica of the pod was always running on a healthy node.
+
+Zero Downtime: Application traffic remained unaffected throughout the incident.
+
+Efficient Scheduling: Kubernetes quickly rescheduled pods to the new node upon node join.
+
+🔍 Root Cause Analysis
+Reason for Node Failure: The node experienced a hardware/network-level failure detected by AWS Health Checks.
+
+Auto-Repair Action: Automatically terminated the node and replaced it with a new one in the Auto Scaling Group.
+
