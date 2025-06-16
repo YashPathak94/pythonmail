@@ -1,0 +1,173 @@
+**Low-Level Design (LLD): Transition from x86 Red Hat Tomcat Image to Amazon Linux 2023 (Graviton) for Java Spring Boot Applications on EKS**
+
+---
+
+### 1. **Objective**
+
+To migrate the existing x86-based, Red Hat Tomcat containerized Java Spring Boot applications to Amazon Linux 2023-based Graviton (ARM64) environment in AWS EKS, reducing licensing costs, improving performance, and achieving cost efficiency.
+
+---
+
+### 2. **Current Architecture Overview**
+
+* **Base Image**: Red Hat UBI with Tomcat (x86\_64)
+* **Application Stack**: Java 11+, Spring Boot, WAR deployments
+* **CI/CD Flow**:
+
+  * Jenkins builds the base image and pushes to Artifactory
+  * GitHub repo consumes this base image, applies app-level changes
+  * Jenkins triggers build jobs, pushes final image to ECR and Artifactory
+  * Separate pipelines handle deployment to environments: `dev`, `devb`, `devc`, `intg`, `intgb`, `intgc`, `accp`, and `prod`
+
+---
+
+### 3. **Target Architecture Overview**
+
+* **Base Image**: Amazon Linux 2023 with ARM64-compatible OpenJDK and Tomcat (if required)
+* **Node Group**: ARM-based Graviton2/3 nodes (e.g., `c6g.large`, `m7g.large`)
+* **Container Images**: Multi-arch Docker images (`linux/amd64`, `linux/arm64`)
+* **CI/CD Changes**: Updated Jenkins pipeline to support multi-arch builds using Docker Buildx
+
+---
+
+### 4. **Key Drivers for Migration**
+
+* **Cost Optimization**:
+
+  * Eliminate Red Hat licensing costs
+  * Reduce compute costs by 20-40% using Graviton
+
+* **Performance Improvements**:
+
+  * Up to 40% better price-performance with Graviton
+  * Better power efficiency and scaling performance
+
+* **Simplification**:
+
+  * Unified base image strategy using Amazon Linux 2023
+  * Avoid dependency on Red Hat ecosystem
+
+---
+
+### 5. **Areas of Change**
+
+| Area                   | Current                    | Target                                     | Action                          |
+| ---------------------- | -------------------------- | ------------------------------------------ | ------------------------------- |
+| **Base Image**         | `ubi/tomcat`               | `amazonlinux:2023` + OpenJDK               | Replace and validate base image |
+| **CPU Arch**           | `x86_64`                   | `arm64` (Graviton)                         | Build multi-arch images         |
+| **Docker Build**       | Single-arch                | Multi-arch (`amd64`, `arm64`)              | Use `docker buildx`             |
+| **Jenkins Pipeline**   | Traditional `docker build` | Use `docker buildx` and QEMU emulation     | Modify Jenkinsfile              |
+| **GitHub Repo**        | Static base image          | Multi-arch base image reference            | Update Dockerfile references    |
+| **K8s Deployments**    | No affinity or toleration  | Add tolerations and affinity for ARM nodes | Modify Helm charts/manifests    |
+| **Monitoring/Logging** | Generic                    | Platform-aware metrics (optional)          | Ensure compatibility on ARM     |
+
+---
+
+### 6. **Implementation Plan**
+
+#### 6.1 Docker Base Image Migration
+
+* Create new Dockerfile using `amazonlinux:2023`
+* Install Tomcat or embed Spring Boot JAR
+* Install OpenJDK 11+ via Amazon Linux package manager
+* Validate app startup locally and in dev
+
+#### 6.2 Jenkins Pipeline Updates
+
+```bash
+# Jenkins build step additions:
+docker run --rm --privileged multiarch/qemu-user-static --reset -p yes
+docker buildx create --name multiarch --use
+docker buildx build \
+  --platform linux/amd64,linux/arm64 \
+  -t <ecr-uri>:<tag> \
+  --push .
+```
+
+#### 6.3 Kubernetes Manifest/Helm Changes
+
+```yaml
+tolerations:
+  - key: "arch"
+    operator: "Equal"
+    value: "arm64"
+    effect: "NoSchedule"
+
+affinity:
+  nodeAffinity:
+    requiredDuringSchedulingIgnoredDuringExecution:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/arch
+              operator: In
+              values:
+                - arm64
+```
+
+#### 6.4 EKS Node Group Setup
+
+```bash
+eksctl create nodegroup --cluster=my-cluster \
+  --name=graviton-ng \
+  --node-type=c6g.large \
+  --nodes=2 --nodes-min=1 --nodes-max=5 \
+  --node-labels="arch=arm64" \
+  --taints arch=arm64:NoSchedule \
+  --region=us-west-2
+```
+
+---
+
+### 7. **Testing Strategy**
+
+* **Unit Testing** on ARM64 for libraries
+* **Integration Testing** for Spring Boot REST APIs
+* **Load/Performance Benchmark** comparison (x86 vs ARM)
+* **Regression Testing** in dev and intg clusters
+
+---
+
+### 8. **Rollout Plan**
+
+1. Deploy Graviton nodes in dev clusters (`devb`, `devc`)
+2. Use Helm with affinity/toleration to direct traffic
+3. Test full functionality of apps and performance
+4. Expand to `intgb`, `intgc`, and `accp`
+5. Migrate `prod` after success in lower environments
+
+---
+
+### 9. **Fallback Strategy**
+
+* Revert to `amd64` only image
+* Reschedule pods on x86 nodes by removing `arch=arm64` tolerations
+* Maintain x86 node groups until ARM rollout is stable
+
+---
+
+### 10. **Deliverables**
+
+| Item               | Description                                         |
+| ------------------ | --------------------------------------------------- |
+| Updated Dockerfile | Amazon Linux 2023-based, multi-arch support         |
+| Jenkins Pipeline   | Multi-arch build and push logic                     |
+| Helm Charts        | Affinity and toleration settings                    |
+| Documentation      | Migration guide, test report, cost-benefit analysis |
+
+---
+
+### 11. **Tools and Dependencies**
+
+* Jenkins with Docker Buildx
+* eksctl, kubectl, Helm
+* Amazon Linux 2023, OpenJDK
+* AWS ECR, Artifactory
+* Prometheus, Grafana, CloudWatch for monitoring
+
+---
+
+### 12. **Summary**
+
+Migrating to Amazon Linux 2023 and Graviton not only removes Red Hat licensing costs but also boosts efficiency through ARM architecture. The transition ensures compatibility via multi-arch images and introduces modern, cost-effective infrastructure without disrupting the existing CI/CD pipeline.
+
+---
