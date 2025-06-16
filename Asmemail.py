@@ -184,3 +184,88 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+########################################################################################
+
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>ACM Certificate Expiry Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background-color: #f9f9f9; }
+        h1 { color: #2c3e50; }
+        h2 { margin-top: 30px; color: #1f3c88; }
+        table { border-collapse: collapse; width: 100%; margin-top: 10px; }
+        th, td { border: 1px solid #ccc; padding: 10px; text-align: left; font-size: 14px; }
+        th { background-color: #34495e; color: white; }
+        tr:hover { background-color: #f1f1f1; }
+        .expired { background-color: #f8d7da; }
+        .warning { background-color: #fff3cd; }
+        .ok { background-color: #d4edda; }
+    </style>
+</head>
+<body>
+    <h1>AWS ACM Certificate Expiry Report</h1>
+
+    <h2>DEV Environment</h2>
+    <table>
+        <tr>
+            <th>Domain Name</th>
+            <th>Expires At</th>
+            <th>Days Left</th>
+        </tr>
+        <tr class="ok">
+            <td>*.dev.vapps.net</td>
+            <td>2025-08-15</td>
+            <td>59 days</td>
+        </tr>
+        
+    </table>
+
+    <h2>INTG Environment</h2>
+    <table>
+        <tr>
+            <th>Domain Name</th>
+            <th>Expires At</th>
+            <th>Days Left</th>
+        </tr>
+        <tr class="ok">
+            <td>*.intg.vapps.net</td>
+            <td>2024-12-10</td>
+            <td>189 days</td>
+        </tr>
+    </table>
+
+    <h2>ACCP Environment</h2>
+    <table>
+        <tr>
+            <th>Domain Name</th>
+            <th>Expires At</th>
+            <th>Days Left</th>
+        </tr>
+        <tr class="ok">
+            <td>*.accp.vapps.net</td>
+            <td>2024-08-25</td>
+            <td>296 days</td>
+        </tr>
+    </table>
+
+    <h2>PROD Environment</h2>
+    <table>
+        <tr>
+            <th>Domain Name</th>
+            <th>Expires At</th>
+            <th>Days Left</th>
+        </tr>
+        <tr class="ok">
+            <td>*.prod.vapps.net</td>
+            <td>2025-01-20</td>
+            <td>230 days</td>
+        </tr>
+
+    </table>
+</body>
+</html>
+
