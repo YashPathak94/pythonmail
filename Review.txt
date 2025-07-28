@@ -449,5 +449,130 @@ Thank you,
 
 ✅ If you'd like, I can also create a formal Word or PDF-ready document with diagrams and summarized risk analysis to attach for approval — just let me know
 
+EKS Microservice Decommissioning Document – rits Application
+📌 Purpose
+This document outlines the process to decommission the rits application from all EKS clusters across environments (dev, intg, accp, prod, dr, etc.), ensuring complete cleanup of Kubernetes resources and Helm configurations. The Helm charts are managed via a Git repository, and this document also details how to retain configurations for potential future re-deployment.
+
+✅ Scope
+Environments: dev, intg, accp, prod, dr
+
+Resource removal: Deployments, Services, Ingress, ConfigMaps, Secrets, PVCs, HPA, ServiceAccounts, etc.
+
+Helm: Uninstall Helm release(s)
+
+Git: Comment/remove Helm release section from values/config
+
+Post-checks: Ensure all associated resources are removed
+
+Archival: Git tag or branch for future redeployment
+
+📁 Pre-requisites
+Kubectl access to all EKS clusters
+
+Helm CLI installed (helm version)
+
+Git access to the Helm chart repo
+
+Backup if required (e.g., persistent volumes or secrets)
+
+🔄 Decommissioning Steps
+1️⃣ Identify Helm Release & Namespace
+List current releases and confirm the rits app:
+
+bash
+Copy code
+helm list -A | grep rits
+# Example output:
+# NAME       NAMESPACE   REVISION   STATUS    CHART         APP VERSION
+# rits-app   rits-ns     4          deployed  rits-1.2.3    2.0.0
+⚠️ Note: Take note of namespace, release name, and chart version.
+
+2️⃣ Helm Uninstall from EKS Cluster
+Run this per environment:
+
+bash
+Copy code
+helm uninstall rits-app -n rits-ns
+If namespace has no other apps, you may delete it:
+
+bash
+Copy code
+kubectl delete ns rits-ns
+3️⃣ Remove Configurations Pushed from Git Helm Chart
+In Git repo:
+
+Navigate to Helm chart folder (e.g., charts/rits)
+
+Comment out or remove values block for rits in umbrella values.yaml
+
+Optionally, remove folder: rm -rf charts/rits (only if this is the final removal and no other env needs it)
+
+Then commit:
+
+bash
+Copy code
+git checkout -b remove-rits-app
+git commit -am "Decommission rits app from all environments"
+git push origin remove-rits-app
+Optionally raise a PR for code review.
+
+4️⃣ Tag for Future Rollback
+Create a Git tag before deleting:
+
+bash
+Copy code
+git tag rits-v1.2.3-final
+git push origin rits-v1.2.3-final
+This ensures the chart and config can be restored easily.
+
+5️⃣ Verify Resource Deletion
+Check that resources are gone:
+
+bash
+Copy code
+kubectl get all -n rits-ns
+kubectl get pvc -n rits-ns
+kubectl get secrets -n rits-ns
+kubectl get configmap -n rits-ns
+No resources should be present.
+
+📦 Optional: Backup Data (Before Step 2)
+If rits uses a PVC or secret:
+
+bash
+Copy code
+kubectl cp rits-ns/pod-name:/path/to/data ./local-backup/
+kubectl get secret -n rits-ns rits-secret -o yaml > rits-secret-backup.yaml
+🧠 Notes
+If rits app had dependencies (e.g., DBs or shared config), verify those aren't used by other apps before deleting.
+
+If using ArgoCD or FluxCD, ensure to remove the GitOps config or Application CRD to avoid re-sync.
+
+🔁 Future Redeployment Steps
+To restore:
+
+bash
+Copy code
+git checkout tags/rits-v1.2.3-final
+helm install rits-app ./charts/rits -f values/rits-dev.yaml -n rits-ns
+Customize values if required for the specific environment.
+
+📌 Audit Record
+Step	Action	Performed By	Date	Notes
+1	Identified rits in all EKS clusters			
+2	Uninstalled Helm release			
+3	Removed config from Git			
+4	Pushed tag rits-v1.2.3-final			
+5	Verified cleanup			
+
+Would you like this as a downloadable .md or .docx file or want it structured as a Confluence page template too?
+
+
+
+
+
+
+
+
 
 
