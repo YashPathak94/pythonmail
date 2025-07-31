@@ -569,6 +569,16 @@ Would you like this as a downloadable .md or .docx file or want it structured as
 
 
 
+helm install qualys-tc /home/a.802117/eks/service-pods/qualys-helm-chart/charts/qualys-tc \
+  --namespace qualys \
+  --create-namespace \
+  --set global.customerId=6435b5c5-6218-4fe0-82dd-753d75 \
+  --set global.activationId=ea6e3b9b-47ef-903d-51b5ae55e0eg \
+  --set global.gatewayUrl=https://gateway.qg3.apps.qualys.com \
+  --set global.clusterInfoArgs.cloudProvider=AWS \
+  --set global.clusterInfoArgs.SELF_MANAGED=EKS \
+  --set global.clusterInfoArgs.clusterName=eks-dev \
+  --set global.qgsSensor.enabled=true
 
 
 
