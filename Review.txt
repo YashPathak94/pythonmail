@@ -582,7 +582,50 @@ helm install qualys-tc /home/a.802117/eks/service-pods/qualys-helm-chart/charts/
 
 
 
+Hi Team,
 
+As part of our environment optimization and resource cleanup activities, we are planning to decommission the EKS microservices related to the BAS-RITS application.
+
+Details:
+
+Application Name: BAS-RITS
+
+Service Type: EKS Microservices
+
+Planned Decommission Date: <DD-MMM-YYYY>
+
+Reason for Decommission: <Brief reason – e.g., service no longer in use / migrated to new platform>
+
+Impact:
+
+Services and associated Kubernetes resources (Pods, Deployments, ConfigMaps, Secrets, RBAC) will be permanently removed from the EKS cluster.
+
+Any dependent applications or integrations will stop functioning post-decommission.
+
+Rollback Plan (If Required):
+In case these microservices need to be restored in the future, we have a rollback process in place:
+
+The application can be re-provisioned using the Helm chart stored in our Git repository.
+
+Deployment will be triggered through Jenkins pipelines, ensuring the application is reinstated with its previous configuration.
+
+Action Required:
+
+Please confirm if there are any active dependencies or ongoing work with these microservices before <confirmation deadline date>.
+
+If no objections are received by the deadline, we will proceed with the planned decommission on the mentioned date.
+
+Next Steps:
+
+Await your confirmation.
+
+Post-approval, the microservices will be removed from the EKS cluster and associated resources will be cleaned up.
+
+A final confirmation mail will be sent post-decommission.
+
+Please reach out if you have concerns, dependencies, or require additional information.
+
+Regards,
 
 
 
