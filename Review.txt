@@ -1,3 +1,12 @@
+aws elbv2 describe-load-balancers \
+  --query "LoadBalancers[].LoadBalancerArn" --output text | \
+xargs -n1 -I {} aws elbv2 describe-tags --resource-arns {} \
+  --query "TagDescriptions[].{ALB:ResourceArn,Tags:Tags[?Key=='kubernetes.io/ingress-name'||Key=='kubernetes.io/namespace']}" \
+  --output table
+
+
+
+
 What challenges did you face, and how did you overcome them?
 
 During the past six months, I encountered several challenges, including managing competing priorities across multiple critical projects and aligning cross-functional teams with tight delivery timelines. For example, coordinating the Sybase-to-SQL migration project required balancing complex infrastructure changes while ensuring minimal impact on production environments.
