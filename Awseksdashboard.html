@@ -1,0 +1,295 @@
+def generate_html_report(clusters_info, current_env):
+    from datetime import datetime
+    from jinja2 import Template
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    template = """
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+      <title>AWS-Style EKS Dashboard</title>
+      <style>
+        /* ===== AWS Console-like Styles ===== */
+        :root {
+          --brand:#232f3e; --accent:#0073bb; --muted:#5f6b7a;
+          --line:#e1e4e8; --bg:#f9fafb; --card:#fff;
+        }
+        *{box-sizing:border-box;}
+        body{margin:0;font-family: "Amazon Ember", Arial, sans-serif;background:var(--bg);color:#111;}
+        .layout{display:flex;min-height:100vh;}
+        .sidebar{width:240px;background:var(--brand);color:#fff;display:flex;flex-direction:column;}
+        .brand{padding:18px;font-size:18px;font-weight:700;color:#fff;border-bottom:1px solid rgba(255,255,255,0.1);}
+        .nav{list-style:none;margin:0;padding:12px;}
+        .nav a{display:block;padding:10px 12px;border-radius:6px;color:#fff;text-decoration:none;font-weight:600;}
+        .nav a:hover{background:rgba(255,255,255,0.1);}
+        .nav a.active{background:var(--accent);color:#fff;}
+        .timestamp{font-size:12px;color:#d1d5db;padding:0 16px;margin-bottom:8px;}
+        .content{flex:1;padding:24px;}
+        h1{color:var(--accent);margin:0 0 8px;}
+        h2{margin-top:28px;color:var(--accent);}
+        h3{margin-top:22px;}
+        h4{margin-top:18px;}
+        .kpis{display:flex;gap:16px;flex-wrap:wrap;margin:12px 0;}
+        .kpi{flex:0 0 200px;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:14px;box-shadow:0 1px 2px rgba(0,0,0,0.05);}
+        .kpi .label{color:var(--muted);font-size:12px;font-weight:600;text-transform:uppercase;}
+        .kpi .value{font-size:22px;font-weight:700;margin-top:6px;}
+        .cluster-card{background:var(--card);border:1px solid var(--line);border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,0.1);padding:16px;margin-bottom:24px;}
+        .cluster-card h3{margin-top:0;color:var(--accent);}
+        table{width:100%;border-collapse:collapse;margin:12px 0 24px;}
+        th,td{border:1px solid var(--line);padding:8px 10px;text-align:left;}
+        th{background:var(--brand);color:#fff;font-weight:600;}
+        .gauge-container{width:110px;height:14px;background:#eee;border-radius:8px;position:relative;}
+        .gauge-fill{height:100%;border-radius:8px;}
+        .gauge-label{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-size:10px;font-weight:700;}
+        .dropdown{margin:8px 0 12px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;}
+        .muted{color:var(--muted);font-size:13px;}
+        .footer{text-align:center;padding:12px;color:var(--muted);border-top:1px solid var(--line);margin-top:24px;}
+        .page{display:none;}
+        .page.active{display:block;}
+        .download-link{display:inline-block;margin-top:8px;color:var(--accent);}
+      </style>
+    </head>
+    <body>
+      <div class="layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+          <div class="brand">EKS Dashboard</div>
+          <div class="timestamp">Generated: {{ timestamp }}</div>
+          <ul class="nav">
+            <li><a href="#home" class="nav-link active" onclick="showPage('home')">Home</a></li>
+            {% for account in accounts %}
+              <li><a href="#{{ account.name }}" class="nav-link" onclick="showPage('{{ account.name }}')">
+                {{ account.name | upper }}
+              </a></li>
+            {% endfor %}
+          </ul>
+          <div style="padding:12px;">
+            <a class="download-link" href="#" onclick="downloadSelf()">Download Report</a>
+          </div>
+        </aside>
+
+        <!-- Content -->
+        <main class="content">
+          <h1>AWS-Style EKS Dashboard</h1>
+
+          <!-- Home Page -->
+          <section id="page-home" class="page active">
+            <div class="kpis">
+              <div class="kpi"><div class="label">Total Clusters</div><div class="value">{{ total_clusters }}</div></div>
+              <div class="kpi"><div class="label">Total Nodes</div><div class="value">{{ total_nodes }}</div></div>
+              <div class="kpi"><div class="label">Total Pods</div><div class="value">{{ total_pods }}</div></div>
+            </div>
+
+            <h3>Cluster Summary</h3>
+            <table>
+              <thead><tr><th>Cluster</th><th>Env</th><th>Region</th><th>Total Nodes</th><th>Total Pods</th></tr></thead>
+              <tbody>
+              {% for cluster in clusters %}
+                <tr>
+                  <td>{{ cluster.name }}</td>
+                  <td>{{ cluster.account }}</td>
+                  <td>{{ cluster.region }}</td>
+                  <td>{{ cluster.total_nodes }}</td>
+                  <td>{{ cluster.total_pods }}</td>
+                </tr>
+              {% endfor %}
+              </tbody>
+            </table>
+          </section>
+
+          <!-- Env Pages -->
+          {% for account in accounts %}
+          <section id="page-{{ account.name }}" class="page">
+            {% set env_clusters = clusters | selectattr('account','equalto',account.name) | list %}
+            <h2>{{ account.name | upper }} Environment</h2>
+            <p class="muted">Showing all clusters for <b>{{ account.name }}</b></p>
+
+            {% for cluster in env_clusters %}
+            <div class="cluster-card">
+              <h3>{{ cluster.name }} ({{ cluster.region }})</h3>
+
+              <!-- Pods Count -->
+              <h4>Pods Count by Namespace Suffix</h4>
+              <table>
+                <thead><tr><th>Group</th><th>Pod Count</th></tr></thead>
+                <tbody>
+                  {% for g in cluster.group_order %}
+                    <tr><td>{{ g }}</td><td>{{ cluster.group_counts.get(g,0) }}</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+
+              <!-- Nodes -->
+              <h4>Nodes Information</h4>
+              <table>
+                <thead><tr><th>Node</th><th>CPU</th><th>Memory</th><th>CPU Util (%)</th><th>Mem Util</th><th>Mem %</th></tr></thead>
+                <tbody>
+                  {% for n in cluster.nodes %}
+                  <tr>
+                    <td>{{ n.name }}</td>
+                    <td>{{ n.cpu_capacity }}</td>
+                    <td>{{ n.memory_capacity_gb }}</td>
+                    <td>{{ n.cpu_utilization }}%</td>
+                    <td>{{ n.memory_utilization_gb }}</td>
+                    <td>
+                      <div class="gauge-container">
+                        <div class="gauge-fill" style="width: {{ n.memory_utilization_percentage }}%; background: {% if n.memory_utilization_percentage|float < 75 %}#20c997{% else %}#f59e0b{% endif %};"></div>
+                        <div class="gauge-label">{{ n.memory_utilization_percentage }}%</div>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+
+              <!-- Pods by Namespace -->
+              <h4>Pods Information by Namespace</h4>
+              <div class="dropdown">
+                <label for="namespace-select-{{ cluster.name }}">Namespace:</label>
+                <select id="namespace-select-{{ cluster.name }}" onchange="filterPodsAndDeploys(this.value, '{{ cluster.name }}')">
+                  <option value="">All</option>
+                  {% for ns in cluster.namespace_counts.keys() | sort %}
+                    <option value="{{ ns }}">{{ ns }} ({{ cluster.namespace_counts[ns] }} Pods)</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <table id="pod-table-{{ cluster.name }}">
+                <thead><tr><th>Namespace</th><th>Pod</th><th>Node</th><th>CPU</th><th>Memory</th></tr></thead>
+                <tbody>
+                  {% for pod in cluster.pods_info %}
+                  <tr class="pod-row" data-namespace="{{ pod.namespace }}">
+                    <td class="ns">{{ pod.namespace }}</td>
+                    <td>{{ pod.name }}</td>
+                    <td>{{ pod.node_name }}</td>
+                    <td>{{ pod.cpu_utilization }}</td>
+                    <td>{{ pod.memory_utilization_gb }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+
+              <!-- Deployments -->
+              <h4>Replica Count by Deployment</h4>
+              <div class="dropdown">
+                <label for="replica-namespace-select-{{ cluster.name }}">Namespace:</label>
+                <select id="replica-namespace-select-{{ cluster.name }}" onchange="filterDeployments(this.value, '{{ cluster.name }}')">
+                  <option value="">All</option>
+                  {% for ns in cluster.deployments_by_ns.keys() | sort %}
+                    <option value="{{ ns }}">{{ ns }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <table id="replica-table-{{ cluster.name }}">
+                <thead><tr><th>Namespace</th><th>Deployment</th><th>Desired</th><th>Ready</th></tr></thead>
+                <tbody>
+                  {% for d in cluster.deployments_info %}
+                  <tr class="deploy-row" data-namespace="{{ d.namespace }}">
+                    <td class="ns">{{ d.namespace }}</td>
+                    <td>{{ d.deployment }}</td>
+                    <td>{{ d.desired }}</td>
+                    <td>{{ d.ready }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+
+              <!-- Max Utilization -->
+              <h4>Maximum Utilization</h4>
+              <div class="dropdown">
+                <label for="max-utilization-select-{{ cluster.name }}">Metric:</label>
+                <select id="max-utilization-select-{{ cluster.name }}" onchange="filterMaxUtilization(this.value, '{{ cluster.name }}')">
+                  <option value="cpu">Max CPU</option>
+                  <option value="memory">Max Memory</option>
+                </select>
+              </div>
+              <table id="max-utilization-table-{{ cluster.name }}">
+                <thead><tr><th>Namespace</th><th>Pod</th><th>Node</th><th>CPU</th><th>Memory</th></tr></thead>
+                <tbody id="max-utilization-body-{{ cluster.name }}">
+                  {% set max_cpu_pods = cluster.pods_info | sort(attribute='cpu_utilization', reverse=True)[:5] %}
+                  {% set max_memory_pods = cluster.pods_info | sort(attribute='memory_utilization_gb', reverse=True)[:5] %}
+                  {% for pod in max_cpu_pods %}
+                  <tr class="max-cpu-row">
+                    <td>{{ pod.namespace }}</td>
+                    <td>{{ pod.name }}</td>
+                    <td>{{ pod.node_name }}</td>
+                    <td>{{ pod.cpu_utilization }}</td>
+                    <td>{{ pod.memory_utilization_gb }}</td>
+                  </tr>
+                  {% endfor %}
+                  {% for pod in max_memory_pods %}
+                  <tr class="max-memory-row" style="display:none;">
+                    <td>{{ pod.namespace }}</td>
+                    <td>{{ pod.name }}</td>
+                    <td>{{ pod.node_name }}</td>
+                    <td>{{ pod.cpu_utilization }}</td>
+                    <td>{{ pod.memory_utilization_gb }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endfor %}
+          </section>
+          {% endfor %}
+
+          <div class="footer">AWS-style Dashboard • Build with ❤️ VENERABLE</div>
+        </main>
+      </div>
+
+      <script>
+        function showPage(p){
+          document.querySelectorAll('.page').forEach(pg=>pg.classList.remove('active'));
+          document.getElementById('page-'+p).classList.add('active');
+          document.querySelectorAll('.nav a').forEach(a=>a.classList.remove('active'));
+          document.querySelector('.nav a[href="#'+p+'"]').classList.add('active');
+          history.replaceState(null,'','#'+p);
+        }
+        window.addEventListener('DOMContentLoaded',()=>{showPage((location.hash||'#home').slice(1));});
+        function filterRowsByNamespace(rows, ns){
+          for(let i=0;i<rows.length;i++){
+            const rowNs=rows[i].getAttribute('data-namespace');
+            rows[i].style.display=(ns===''||rowNs===ns)?'':'none';
+          }
+        }
+        function filterPodsAndDeploys(ns,key){
+          filterRowsByNamespace(document.querySelectorAll('#pod-table-'+key+' .pod-row'), ns);
+          filterRowsByNamespace(document.querySelectorAll('#replica-table-'+key+' .deploy-row'), ns);
+        }
+        function filterDeployments(ns,key){
+          filterRowsByNamespace(document.querySelectorAll('#replica-table-'+key+' .deploy-row'), ns);
+        }
+        function filterMaxUtilization(metric,key){
+          const cpu=document.querySelectorAll('#max-utilization-table-'+key+' .max-cpu-row');
+          const mem=document.querySelectorAll('#max-utilization-table-'+key+' .max-memory-row');
+          if(metric==='cpu'){cpu.forEach(r=>r.style.display='');mem.forEach(r=>r.style.display='none');}
+          else{cpu.forEach(r=>r.style.display='none');mem.forEach(r=>r.style.display='');}
+        }
+        function downloadSelf(){
+          const blob=new Blob([document.documentElement.outerHTML],{type:'text/html'});
+          const url=URL.createObjectURL(blob);
+          const a=document.createElement('a');a.href=url;a.download='eks_dashboard.html';a.click();URL.revokeObjectURL(url);
+        }
+      </script>
+    </body>
+    </html>
+    """
+
+    total_clusters = len(clusters_info)
+    total_nodes = sum(len(c['nodes']) for c in clusters_info)
+    total_pods = sum(len(c['pods_info']) for c in clusters_info)
+    for c in clusters_info:
+        c['total_nodes'] = len(c['nodes'])
+        c['total_pods'] = len(c['pods_info'])
+
+    html_template = Template(template)
+    return html_template.render(
+        total_clusters=total_clusters,
+        total_nodes=total_nodes,
+        total_pods=total_pods,
+        clusters=clusters_info,
+        accounts=accounts,
+        timestamp=timestamp
+    )
