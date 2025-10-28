@@ -97,3 +97,6 @@ Add highlight color (green for Enterprise features).
 
 End the slide with:
 “Recommendation: Start with free EKS add-on in dev, move to Enterprise for multi-cluster production.”
+
+
+kubectl get pods -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{range .status.containerStatuses[*]}{.name}{"\t"}{.containerID}{"\n"}{end}{end}'
