@@ -1,0 +1,14 @@
+aws eks update-addon \
+  --cluster-name <cluster-name> \
+  --addon-name amazon-cloudwatch-observability \
+  --configuration-values '{
+    "containerLogs": {
+      "enabled": true,
+      "fluentBit": {
+        "configMapName": "fluent-bit-config",
+        "configMapKey": "fluent-bit.conf",
+        "parsersConfigMapName": "fluent-bit-parsers",
+        "parsersConfigMapKey": "parsers.conf"
+      }
+    }
+  }'
