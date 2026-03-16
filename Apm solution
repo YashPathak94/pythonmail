@@ -1,0 +1,50 @@
+Hi Team,
+
+We have completed the implementation of Application Performance Monitoring (APM) enablement for microservices running on the EKS cluster using the AWS CloudWatch Observability add-on along with OpenTelemetry auto-instrumentation.
+
+**Objective:**
+The purpose of this activity is to enable end-to-end application observability including distributed tracing, application metrics, log correlation, and service dependency visibility to improve production monitoring and reduce incident resolution time.
+
+**Activities Completed:**
+
+1. Enabled AWS CloudWatch Observability add-on on the EKS cluster to configure Container Insights, log forwarding, and trace collection pipelines.
+2. Enabled CloudWatch Application Signals to provide service maps, latency monitoring, error tracking, and request throughput visibility.
+3. Implemented OpenTelemetry Java auto-instrumentation for selected microservices by updating deployment configurations.
+4. Added required deployment annotations:
+   instrumentation.opentelemetry.io/inject-java: "true"
+5. Configured application environment variables to enable tracing, metrics, and log correlation:
+
+   * OTEL_AWS_APPLICATION_SIGNALS_ENABLED=true
+   * OTEL_TRACES_SAMPLER=xray
+   * OTEL_INSTRUMENTATION_LOGGING_ENABLED=true
+   * OTEL_RESOURCE_ATTRIBUTES (service identification)
+   * JAVA_TOOL_OPTIONS for Java agent injection
+6. Restarted instrumented deployments and validated:
+
+   * Trace visibility in Application Signals dashboard
+   * Service dependency mapping
+   * Latency and error metrics
+   * Log correlation with trace IDs
+7. Planned namespace-level auto instrumentation strategy to simplify onboarding of future services.
+
+**Benefits:**
+
+* End-to-end request tracing across microservices
+* Faster root cause analysis and reduced MTTR
+* Improved visibility into application performance
+* Centralized monitoring using AWS native observability tools
+* Better proactive alerting and service reliability
+
+**Next Steps (Proposed):**
+
+* Expand instrumentation to additional non-critical services
+* Enable namespace-level auto instrumentation for scalability
+* Integrate instrumentation configuration into CI/CD pipelines
+* Rollout to production environments after approval
+
+Requesting your review and sign-off to proceed with the wider rollout of APM instrumentation across environments.
+
+Please let me know if any clarification or demo is required.
+
+Thanks & Regards,
+Kavya
