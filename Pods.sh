@@ -194,3 +194,174 @@ END {
     printf "%-20s %-40s %-35s %-50s\n", ns, deploy_color, node, pod_color
   }
 }'
+
+
+
+<!DOCTYPE html>
+<html>
+<head>
+<title>EKS Dashboard Demo</title>
+
+<style>
+body { font-family: Arial; margin: 20px; }
+
+.cards {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.card {
+    flex: 1 1 180px;
+    padding: 20px;
+    border-radius: 10px;
+    color: white;
+    text-align: center;
+    font-weight: bold;
+}
+
+.blue { background: #007BFF; }
+.green { background: #28a745; }
+.orange { background: #fd7e14; }
+.purple { background: #6f42c1; }
+.dark { background: #343a40; }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 30px;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 10px;
+}
+
+th {
+    background: #007BFF;
+    color: white;
+}
+</style>
+
+</head>
+
+<body>
+
+<h1>Venerable EKS Dashboard</h1>
+
+<!-- CARDS -->
+<div class="cards">
+
+    <div class="card blue">
+        <h3>Total Clusters</h3>
+        <p>6</p>
+    </div>
+
+    <div class="card green">
+        <h3>Total Nodes</h3>
+        <p>32</p>
+    </div>
+
+    <div class="card orange">
+        <h3>Total Pods</h3>
+        <p>1262</p>
+    </div>
+
+    <div class="card purple">
+        <h3>DEV Apps</h3>
+        <p>45</p>
+    </div>
+
+    <div class="card purple">
+        <h3>IDEV Apps</h3>
+        <p>20</p>
+    </div>
+
+    <div class="card purple">
+        <h3>INTG Apps</h3>
+        <p>30</p>
+    </div>
+
+    <div class="card dark">
+        <h3>PROD Apps</h3>
+        <p>60</p>
+    </div>
+
+    <div class="card dark">
+        <h3>ACCP Apps</h3>
+        <p>25</p>
+    </div>
+
+</div>
+
+<!-- TABLE -->
+<h2>Cluster Summary</h2>
+
+<table>
+<tr>
+<th>Cluster</th>
+<th>Env</th>
+<th>Region</th>
+<th>Nodes</th>
+<th>Pods</th>
+<th>Applications</th>
+</tr>
+
+<tr>
+<td>venerable-eks-dev</td>
+<td>dev</td>
+<td>us-east-1</td>
+<td>11</td>
+<td>320</td>
+<td>15</td>
+</tr>
+
+<tr>
+<td>ven-eks-idev</td>
+<td>idev</td>
+<td>us-east-1</td>
+<td>4</td>
+<td>120</td>
+<td>10</td>
+</tr>
+
+<tr>
+<td>venerable-eks-intg</td>
+<td>intg</td>
+<td>us-east-1</td>
+<td>5</td>
+<td>200</td>
+<td>12</td>
+</tr>
+
+<tr>
+<td>venerable-eks-prod</td>
+<td>prod</td>
+<td>us-east-1</td>
+<td>4</td>
+<td>350</td>
+<td>20</td>
+</tr>
+
+<tr>
+<td>venerable-eks-accp</td>
+<td>accp</td>
+<td>us-east-1</td>
+<td>8</td>
+<td>250</td>
+<td>18</td>
+</tr>
+
+<tr>
+<td>venerable-eks-dr</td>
+<td>dr</td>
+<td>us-west-2</td>
+<td>0</td>
+<td>22</td>
+<td>5</td>
+</tr>
+
+</table>
+
+</body>
+</html>
