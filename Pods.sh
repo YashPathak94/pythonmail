@@ -1,3 +1,22 @@
+def get_deployment_count(cluster_name, aws_session):
+    ctx = _kubectl_ctx(aws_session, cluster_name)
+
+    cmd = (
+        f"kubectl get deploy -A --context={ctx} "
+        "-o jsonpath='{range .items[*]}{.metadata.name} {end}'"
+    )
+
+    try:
+        output = subprocess.check_output(cmd, shell=True).decode().strip().split()
+        return len(output)
+    except:
+        return 0
+
+
+
+
+
+
 kubectl get pods -A -o wide --no-headers | awk '{print $8, $2}' | sort | \
 awk '
 {
