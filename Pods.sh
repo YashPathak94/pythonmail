@@ -1,3 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>EKS Dashboard - Charts Demo</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        body { font-family: Arial; margin: 20px; }
+        h1 { text-align: center; }
+
+        .cards {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            flex: 1 1 180px;
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            text-align: center;
+            font-weight: bold;
+        }
+
+        .blue { background: #007BFF; }
+        .green { background: #28a745; }
+        .orange { background: #fd7e14; }
+        .purple { background: #6f42c1; }
+
+        .cluster-box {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin-top: 30px;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+
+<body>
+
+<h1>EKS Dashboard (Grafana Style Charts)</h1>
+
+<!-- KPI CARDS -->
+<div class="cards">
+    <div class="card blue"><h3>Total Clusters</h3><p>3</p></div>
+    <div class="card green"><h3>Total Nodes</h3><p>18</p></div>
+    <div class="card orange"><h3>Total Pods</h3><p>540</p></div>
+    <div class="card purple"><h3>Total Apps</h3><p>120</p></div>
+</div>
+
+<!-- GLOBAL CHART -->
+<h2>Global Apps per Suffix</h2>
+<canvas id="globalChart" height="100"></canvas>
+
+<script>
+new Chart(document.getElementById('globalChart'), {
+    type: 'bar',
+    data: {
+        labels: ['dev', 'devb', 'devc'],
+        datasets: [{
+            label: 'Applications',
+            data: [50, 30, 20],
+            backgroundColor: ['#007BFF','#28a745','#fd7e14']
+        }]
+    },
+    options: {
+        responsive: true,
+        plugins: {
+            legend: { display: true }
+        }
+    }
+});
+</script>
+
+<!-- CLUSTER 1 -->
+<div class="cluster-box">
+    <h3>Cluster: eks-dev-cluster (dev)</h3>
+
+    <canvas id="cluster1Chart" height="100"></canvas>
+
+    <script>
+    new Chart(document.getElementById('cluster1Chart'), {
+        type: 'bar',
+        data: {
+            labels: ['dev', 'devb', 'devc'],
+            datasets: [{
+                label: 'Apps',
+                data: [20, 10, 5],
+                backgroundColor: ['#007BFF','#28a745','#fd7e14']
+            }]
+        }
+    });
+    </script>
+</div>
+
+<!-- CLUSTER 2 -->
+<div class="cluster-box">
+    <h3>Cluster: eks-intg-cluster (intg)</h3>
+
+    <canvas id="cluster2Chart" height="100"></canvas>
+
+    <script>
+    new Chart(document.getElementById('cluster2Chart'), {
+        type: 'bar',
+        data: {
+            labels: ['intg', 'intgb', 'intgc'],
+            datasets: [{
+                label: 'Apps',
+                data: [15, 12, 8],
+                backgroundColor: ['#6f42c1','#20c997','#ffc107']
+            }]
+        }
+    });
+    </script>
+</div>
+
+<!-- CLUSTER 3 -->
+<div class="cluster-box">
+    <h3>Cluster: eks-prod-cluster (prod)</h3>
+
+    <canvas id="cluster3Chart" height="100"></canvas>
+
+    <script>
+    new Chart(document.getElementById('cluster3Chart'), {
+        type: 'bar',
+        data: {
+            labels: ['proda', 'prodb'],
+            datasets: [{
+                label: 'Apps',
+                data: [25, 18],
+                backgroundColor: ['#dc3545','#343a40']
+            }]
+        }
+    });
+    </script>
+</div>
+
+</body>
+</html>
+
+
+
 def get_deployment_count(cluster_name, aws_session):
     ctx = _kubectl_ctx(aws_session, cluster_name)
 
