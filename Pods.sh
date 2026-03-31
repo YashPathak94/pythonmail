@@ -1,53 +1,45 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>EKS Dashboard - Charts Demo</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<title>EKS Dashboard Demo</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-    <style>
-        body { font-family: Arial; margin: 20px; }
-        h1 { text-align: center; }
+<style>
+body { font-family: Arial; margin:20px; }
+h1 { text-align:center; }
 
-        .cards {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
+.cards { display:flex; flex-wrap:wrap; gap:15px; margin-bottom:20px; }
+.card { flex:1 1 180px; padding:20px; border-radius:10px; color:white; text-align:center; font-weight:bold; }
 
-        .card {
-            flex: 1 1 180px;
-            padding: 20px;
-            border-radius: 10px;
-            color: white;
-            text-align: center;
-            font-weight: bold;
-        }
+.blue{background:#007BFF;}
+.green{background:#28a745;}
+.orange{background:#fd7e14;}
+.purple{background:#6f42c1;}
+.dark{background:#343a40;}
 
-        .blue { background: #007BFF; }
-        .green { background: #28a745; }
-        .orange { background: #fd7e14; }
-        .purple { background: #6f42c1; }
+.cluster { border:1px solid #ddd; padding:15px; margin-top:30px; border-radius:10px; }
 
-        .cluster-box {
-            border: 1px solid #ddd;
-            padding: 20px;
-            margin-top: 30px;
-            border-radius: 10px;
-        }
-    </style>
+table { width:100%; border-collapse:collapse; margin-top:20px;}
+th,td{border:1px solid #ddd; padding:8px;}
+th{background:#007BFF;color:white;}
+</style>
 </head>
 
 <body>
 
-<h1>EKS Dashboard (Grafana Style Charts)</h1>
+<h1>EKS Dashboard (Demo)</h1>
 
 <!-- KPI CARDS -->
 <div class="cards">
-    <div class="card blue"><h3>Total Clusters</h3><p>3</p></div>
-    <div class="card green"><h3>Total Nodes</h3><p>18</p></div>
-    <div class="card orange"><h3>Total Pods</h3><p>540</p></div>
-    <div class="card purple"><h3>Total Apps</h3><p>120</p></div>
+<div class="card blue"><h3>Clusters</h3><p>5</p></div>
+<div class="card green"><h3>Nodes</h3><p>24</p></div>
+<div class="card orange"><h3>Pods</h3><p>980</p></div>
+
+<div class="card purple"><h3>DEV Apps</h3><p>40</p></div>
+<div class="card purple"><h3>IDEV Apps</h3><p>18</p></div>
+<div class="card purple"><h3>INTG Apps</h3><p>30</p></div>
+<div class="card dark"><h3>PROD Apps</h3><p>55</p></div>
+<div class="card dark"><h3>ACCP Apps</h3><p>22</p></div>
 </div>
 
 <!-- GLOBAL CHART -->
@@ -56,85 +48,74 @@
 
 <script>
 new Chart(document.getElementById('globalChart'), {
-    type: 'bar',
-    data: {
-        labels: ['dev', 'devb', 'devc'],
-        datasets: [{
-            label: 'Applications',
-            data: [50, 30, 20],
-            backgroundColor: ['#007BFF','#28a745','#fd7e14']
+    type:'bar',
+    data:{
+        labels:['dev','devb','devc'],
+        datasets:[{
+            label:'Applications',
+            data:[40,25,15],
+            backgroundColor:['#007BFF','#28a745','#fd7e14']
         }]
-    },
-    options: {
-        responsive: true,
-        plugins: {
-            legend: { display: true }
-        }
     }
 });
 </script>
 
-<!-- CLUSTER 1 -->
-<div class="cluster-box">
-    <h3>Cluster: eks-dev-cluster (dev)</h3>
+<!-- CLUSTER SUMMARY -->
+<h2>Cluster Summary</h2>
+<table>
+<tr>
+<th>Cluster</th><th>Env</th><th>Nodes</th><th>Pods</th><th>Apps</th>
+</tr>
 
-    <canvas id="cluster1Chart" height="100"></canvas>
+<tr><td>eks-dev</td><td>dev</td><td>8</td><td>300</td><td>18</td></tr>
+<tr><td>eks-idev</td><td>idev</td><td>3</td><td>100</td><td>10</td></tr>
+<tr><td>eks-intg</td><td>intg</td><td>4</td><td>200</td><td>12</td></tr>
+<tr><td>eks-prod</td><td>prod</td><td>6</td><td>280</td><td>20</td></tr>
+<tr><td>eks-accp</td><td>accp</td><td>3</td><td>100</td><td>8</td></tr>
+</table>
 
-    <script>
-    new Chart(document.getElementById('cluster1Chart'), {
-        type: 'bar',
-        data: {
-            labels: ['dev', 'devb', 'devc'],
-            datasets: [{
-                label: 'Apps',
-                data: [20, 10, 5],
-                backgroundColor: ['#007BFF','#28a745','#fd7e14']
-            }]
-        }
-    });
-    </script>
+<!-- CLUSTER CHARTS -->
+
+<div class="cluster">
+<h3>eks-dev (dev)</h3>
+<canvas id="chart1"></canvas>
+<script>
+new Chart(document.getElementById('chart1'), {
+type:'bar',
+data:{
+labels:['dev','devb','devc'],
+datasets:[{label:'Apps', data:[10,5,3], backgroundColor:'#007BFF'}]
+}
+});
+</script>
 </div>
 
-<!-- CLUSTER 2 -->
-<div class="cluster-box">
-    <h3>Cluster: eks-intg-cluster (intg)</h3>
-
-    <canvas id="cluster2Chart" height="100"></canvas>
-
-    <script>
-    new Chart(document.getElementById('cluster2Chart'), {
-        type: 'bar',
-        data: {
-            labels: ['intg', 'intgb', 'intgc'],
-            datasets: [{
-                label: 'Apps',
-                data: [15, 12, 8],
-                backgroundColor: ['#6f42c1','#20c997','#ffc107']
-            }]
-        }
-    });
-    </script>
+<div class="cluster">
+<h3>eks-intg (intg)</h3>
+<canvas id="chart2"></canvas>
+<script>
+new Chart(document.getElementById('chart2'), {
+type:'bar',
+data:{
+labels:['intg','intgb','intgc'],
+datasets:[{label:'Apps', data:[8,6,4], backgroundColor:'#6f42c1'}]
+}
+});
+</script>
 </div>
 
-<!-- CLUSTER 3 -->
-<div class="cluster-box">
-    <h3>Cluster: eks-prod-cluster (prod)</h3>
-
-    <canvas id="cluster3Chart" height="100"></canvas>
-
-    <script>
-    new Chart(document.getElementById('cluster3Chart'), {
-        type: 'bar',
-        data: {
-            labels: ['proda', 'prodb'],
-            datasets: [{
-                label: 'Apps',
-                data: [25, 18],
-                backgroundColor: ['#dc3545','#343a40']
-            }]
-        }
-    });
-    </script>
+<div class="cluster">
+<h3>eks-prod (prod)</h3>
+<canvas id="chart3"></canvas>
+<script>
+new Chart(document.getElementById('chart3'), {
+type:'bar',
+data:{
+labels:['proda','prodb'],
+datasets:[{label:'Apps', data:[12,8], backgroundColor:'#dc3545'}]
+}
+});
+</script>
 </div>
 
 </body>
