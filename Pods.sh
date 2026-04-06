@@ -4,45 +4,56 @@ def detect_pod_colocation(cluster_name, aws_session):
     ctx = _kubectl_ctx(aws_session, cluster_name)
 
     cmd = f"""
-    kubectl get pods -A --context={ctx} \
-    -o jsonpath='{{range .items[*]}}{{.metadata.namespace}}|{{.metadata.name}}|{{.spec.nodeName}} {{end}}'
+    kubectl get pods -A --context={ctx} -o json
     """
 
     try:
-        output = subprocess.check_output(cmd, shell=True).decode().strip().split()
-    except:
+        import json
+        output = subprocess.check_output(cmd, shell=True)
+        data = json.loads(output)
+    except Exception as e:
+        print("Error fetching pods:", e)
         return alerts
 
-    # structure: { (ns, app) : {node: count} }
-    app_node_map = {}
+    # structure: {(namespace, app, node): [pods]}
+    tracker = {}
 
-    for line in output:
+    for item in data.get("items", []):
         try:
-            ns, pod, node = line.split('|')
+            ns = item["metadata"]["namespace"]
+            pod = item["metadata"]["name"]
+            node = item["spec"].get("nodeName", "NA")
 
-            # Extract app name (remove random suffix)
-            app = "-".join(pod.split('-')[:-2])
+            labels = item["metadata"].get("labels", {})
 
-            key = (ns, app)
+            # 🔥 BEST PRACTICE: use labels
+            app = (
+                labels.get("app") or
+                labels.get("app.kubernetes.io/name") or
+                labels.get("k8s-app") or
+                pod.split("-")[0]  # fallback
+            )
 
-            if key not in app_node_map:
-                app_node_map[key] = {}
+            key = (ns, app, node)
 
-            app_node_map[key][node] = app_node_map[key].get(node, 0) + 1
+            if key not in tracker:
+                tracker[key] = []
 
-        except:
+            tracker[key].append(pod)
+
+        except Exception:
             continue
 
-    # detect duplicates
-    for (ns, app), nodes in app_node_map.items():
-        for node, count in nodes.items():
-            if count > 1:
-                alerts.append({
-                    'namespace': ns,
-                    'app': app,
-                    'node': node,
-                    'count': count
-                })
+    # detect co-location
+    for (ns, app, node), pods in tracker.items():
+        if len(pods) > 1:
+            alerts.append({
+                "namespace": ns,
+                "app": app,
+                "node": node,
+                "count": len(pods),
+                "pods": pods
+            })
 
     return alerts
 
