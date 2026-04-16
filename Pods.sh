@@ -9,6 +9,80 @@ def detect_pod_colocation(cluster_name, aws_session):
 
     try:
         import json
+        import subprocess
+        output = subprocess.check_output(cmd, shell=True)
+        data = json.loads(output)
+    except Exception as e:
+        print("Error fetching pods:", e)
+        return alerts
+
+    # 🚫 Exclude these namespaces
+    EXCLUDED_PREFIXES = ["envoy", "qualys", "appdynamics", "basic-datalore"]
+
+    # structure: {(namespace, app, node): [pods]}
+    tracker = {}
+
+    for item in data.get("items", []):
+        try:
+            ns = item["metadata"]["namespace"]
+
+            # 🔥 Skip unwanted namespaces (prefix-based for flexibility)
+            if any(ns.startswith(prefix) for prefix in EXCLUDED_PREFIXES):
+                continue
+
+            pod = item["metadata"]["name"]
+            node = item["spec"].get("nodeName")
+
+            # Skip pods not yet scheduled
+            if not node:
+                continue
+
+            labels = item["metadata"].get("labels", {})
+
+            # ✅ Better app identification
+            app = (
+                labels.get("app.kubernetes.io/name") or
+                labels.get("app") or
+                labels.get("k8s-app") or
+                pod.rsplit("-", 2)[0]  # better fallback
+            )
+
+            key = (ns, app, node)
+
+            if key not in tracker:
+                tracker[key] = []
+
+            tracker[key].append(pod)
+
+        except Exception:
+            continue
+
+    # detect co-location
+    for (ns, app, node), pods in tracker.items():
+        if len(pods) > 1:
+            alerts.append({
+                "namespace": ns,
+                "app": app,
+                "node": node,
+                "count": len(pods),
+                "pods": pods
+            })
+
+    return alerts
+
++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+def detect_pod_colocation(cluster_name, aws_session):
+    alerts = []
+
+    ctx = _kubectl_ctx(aws_session, cluster_name)
+
+    cmd = f"""
+    kubectl get pods -A --context={ctx} -o json
+    """
+
+    try:
+        import json
         output = subprocess.check_output(cmd, shell=True)
         data = json.loads(output)
     except Exception as e:
