@@ -1,0 +1,36 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+
+    {
+      "Effect": "Allow",
+      "Action": "cloudwatch:PutMetricData",
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "cloudwatch:namespace": "ContainerInsights/Prometheus"
+        }
+      }
+    },
+
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:us-east-1:<ACCOUNT_ID>:log-group:/aws/containerinsights/venerable-eks-dev/prometheus:log-stream:*"
+    },
+
+    {
+      "Effect": "Allow",
+      "Action": "logs:CreateLogGroup",
+      "Resource": "*",
+      "Condition": {
+        "StringLike": {
+          "logs:logGroupName": "/aws/containerinsights/venerable-eks-dev/*"
+        }
+      }
+    }
+  ]
+}
