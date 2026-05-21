@@ -1,0 +1,169 @@
+Please find below the chronology, observations, impact analysis, and current status regarding the AWS Secrets Manager authentication issue impacting EKS microservices in the INTG and ACCP environments.
+
+Incident Summary
+
+An authentication-related issue was identified impacting microservices running on EKS clusters in the INTG and ACCP environments. The issue primarily affects applications retrieving secrets from AWS Secrets Manager through the AWS Secrets Store CSI Driver Provider (ASCP).
+
+The impacted application identified currently is:
+
+Namespace: digtran
+Application: claim-service
+
+The services started reporting failures beginning on <DATE>.
+
+Chronology of Events
+1. Initial Error Observation
+
+On <DATE>, applications in INTG and ACCP environments started reporting runtime authentication failures while accessing AWS Secrets Manager.
+
+Application logs showed repeated exceptions similar to:
+
+SecretsManagerException:
+The request signature we calculated does not match the signature you provided
+
+This indicated AWS Signature Version 4 authentication failures during Secrets Manager API calls.
+
+2. AWS Health Notification Identified
+
+During investigation, AWS Health Dashboard notifications were reviewed, and an active AWS Secrets Manager security notification was identified.
+
+AWS notification indicated:
+
+Upcoming ASCP (AWS Secrets and Configuration Provider) upgrade
+ASCP version upgrade to v3.1.0
+Underlying Secrets Store CSI Driver upgrade to v1.6.0
+Security hardening and least-privilege enforcement changes
+
+AWS specifically mentioned:
+
+Users running ASCP through EKS Add-on or Helm may require action
+Security enforcement changes could affect permissions and secret mount/update behavior
+3. Correlation with EKS Secret Access Failures
+
+After reviewing the AWS advisory and cluster behavior, the issue appeared correlated with:
+
+AWS Secrets Store CSI Driver Provider changes
+Credential resolution failures
+Service Account / IAM authentication issues
+
+The timing of the failures aligns with the AWS ASCP security-related changes.
+
+Technical Findings
+1. AWS SDK Credential Resolution Failure
+
+Further debugging from application logs identified the following additional error:
+
+Profile file contained no credentials for profile 'default'
+
+and
+
+Unable to load credentials from ProfileCredentialsProvider
+
+This indicates that the application was unable to successfully resolve AWS credentials for Secrets Manager access.
+
+2. Signature Validation Failures
+
+Applications subsequently failed with:
+
+The request signature we calculated does not match the signature you provided
+
+This typically occurs when:
+
+Invalid credentials are used
+Expired credentials are presented
+Incorrect IAM authentication chain is used
+IRSA/service account mapping is incomplete
+SDK falls back to invalid/default credential provider
+3. Impact Scope
+
+Affected environments:
+
+INTG
+ACCP
+
+Affected platform:
+
+EKS workloads using Secrets Manager integration
+
+Known impacted workload:
+
+Namespace: digtran
+Service: claim-service
+
+Impact observed:
+
+Application startup failures
+Secret retrieval failures
+Runtime authentication exceptions
+Service instability for workloads dependent on Secrets Manager
+Actions Performed
+1. Service Account Creation
+
+Created Kubernetes Service Account (SA) intended for IAM Role association.
+
+2. AWS Secrets Store CSI Driver Provider Configuration
+
+Configured:
+
+aws-secrets-store-csi-driver-provider
+SecretProviderClass related configurations
+3. Validation and Retesting
+
+Post configuration updates:
+
+Pods were restarted
+Secret mounts were revalidated
+Applications were redeployed/tested
+
+However, the issue continues to persist.
+
+Current Observations
+
+Current behavior indicates:
+
+Applications are still unable to correctly resolve AWS credentials
+SDK appears to be attempting fallback credential resolution using local/default profile
+IRSA-based credential injection may not yet be functioning correctly
+Secret retrieval requests continue failing with AWS signature mismatch errors
+Preliminary Suspected Root Cause
+
+The issue is currently suspected to be related to one or more of the following:
+
+ASCP / CSI Driver security upgrade behavior changes
+Incomplete or incorrect IRSA configuration
+Service Account to IAM Role mapping issue
+AWS SDK credential chain fallback to invalid/default profile
+Permission enforcement changes introduced in ASCP v3.1.0 / CSI Driver v1.6.0
+Current Status
+
+Status: Ongoing Investigation
+
+Environment impact:
+
+INTG – Impacted
+ACCP – Impacted
+
+Business impact:
+
+Microservices dependent on Secrets Manager are unable to reliably retrieve secrets
+Potential degradation or startup failures for impacted services
+Next Steps
+
+The following activities are currently in progress:
+
+Validate IRSA token injection into impacted pods
+Verify Service Account to IAM Role trust relationship
+Validate Secrets Manager IAM permissions
+Validate ASCP addon/provider versions across clusters
+Validate CSI Driver mount and credential provider behavior
+Review SDK credential provider chain behavior
+Compare working vs impacted environments
+Engage AWS Support if required after validation completion
+Recommendation
+
+Recommend:
+
+Prioritizing ASCP/CSI Driver validation across all EKS environments
+Performing controlled verification after ASCP upgrades
+Validating all workloads using IRSA and Secrets Manager integration
+Monitoring additional workloads for similar symptoms
