@@ -1,0 +1,14 @@
+for role in $(kubectl get sa -A -o json | jq -r '
+.items[] |
+select(.metadata.annotations["eks.amazonaws.com/role-arn"] != null) |
+.metadata.annotations["eks.amazonaws.com/role-arn"]' | awk -F/ '{print $NF}')
+do
+  echo "Checking role: $role"
+
+  aws iam list-attached-role-policies \
+    --role-name $role \
+    --query 'AttachedPolicies[*].PolicyName' \
+    --output text
+
+  echo "--------------------------------"
+done
