@@ -12,3 +12,28 @@ do
 
   echo "--------------------------------"
 done
+kubectl patch deployment <deployment-name> -n <namespace> \
+--type='merge' \
+-p '{
+  "spec": {
+    "template": {
+      "metadata": {
+        "annotations": {
+          "instrumentation.opentelemetry.io/inject-java": "true",
+          "prometheus.io/scrape": "true",
+          "prometheus.io/path": "/actuator/prometheus",
+          "prometheus.io/port": "9404"
+        }
+      },
+      "spec": {
+        "containers": [{
+          "name": "<container-name>",
+          "env": [{
+            "name": "OTEL_PROPAGATORS",
+            "value": "xray"
+          }]
+        }]
+      }
+    }
+  }
+}'
