@@ -48,3 +48,188 @@ Please let me know if any clarification or demo is required.
 
 Thanks & Regards,
 Kavya
+
+
++++++++++++
+
+aws ses verify-email-identity \
+  --email-address aws-health-alerts@yourdomain.com \
+  --region us-east-1
+
+aws ses verify-email-identity \
+  --email-address your-team-email@yourdomain.com \
+  --region us-east-1
+
+aws ses get-identity-verification-attributes \
+  --identities aws-health-alerts@yourdomain.com your-team-email@yourdomain.com \
+  --region us-east-1
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": "lambda.amazonaws.com"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+
+aws iam create-role \
+  --role-name dev-aws-health-alert-lambda-role \
+  --assume-role-policy-document file://trust-policy.json
+
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CloudWatchLogs",
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "SendEmailUsingSES",
+      "Effect": "Allow",
+      "Action": [
+        "ses:SendEmail",
+        "ses:SendRawEmail"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "DynamoDBDedupeAccess",
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:PutItem"
+      ],
+      "Resource": "arn:aws:dynamodb:us-east-1:<DEV_ACCOUNT_ID>:table/dev-aws-health-alert-dedupe"
+    }
+  ]
+}
+
+aws iam put-role-policy \
+  --role-name dev-aws-health-alert-lambda-role \
+  --policy-name dev-aws-health-alert-lambda-policy \
+  --policy-document file://lambda-policy.json
+
+
+zip lambda.zip lambda_function.py
+
+aws lambda create-function \
+  --function-name dev-aws-health-email-alert \
+  --runtime python3.12 \
+  --role arn:aws:iam::<DEV_ACCOUNT_ID>:role/dev-aws-health-alert-lambda-role \
+  --handler lambda_function.lambda_handler \
+  --zip-file fileb://lambda.zip \
+  --timeout 60 \
+  --memory-size 256 \
+  --region us-east-1 \
+  --environment "Variables={ENVIRONMENT=dev,FROM_EMAIL=aws-health-alerts@yourdomain.com,TO_EMAILS=your-team-email@yourdomain.com,DEDUPE_TABLE=dev-aws-health-alert-dedupe}"
+
+
+aws events put-rule \
+  --name dev-aws-health-events \
+  --event-pattern '{
+    "source": ["aws.health"],
+    "detail-type": ["AWS Health Event"]
+  }' \
+  --state ENABLED \
+  --region us-east-1
+
+aws events put-targets \
+  --rule dev-aws-health-events \
+  --targets "Id"="1","Arn"="arn:aws:lambda:us-east-1:<DEV_ACCOUNT_ID>:function:dev-aws-health-email-alert" \
+  --region us-east-1
+
+aws lambda add-permission \
+  --function-name dev-aws-health-email-alert \
+  --statement-id allow-dev-eventbridge-health \
+  --action lambda:InvokeFunction \
+  --principal events.amazonaws.com \
+  --source-arn arn:aws:events:us-east-1:<DEV_ACCOUNT_ID>:rule/dev-aws-health-events \
+  --region us-east-1
+
++++++++++
+
+{
+  "version": "0",
+  "id": "test-event-001",
+  "detail-type": "AWS Health Event",
+  "source": "aws.health",
+  "account": "<DEV_ACCOUNT_ID>",
+  "time": "2026-06-11T10:00:00Z",
+  "region": "ap-south-1",
+  "detail": {
+    "affectedAccount": "<DEV_ACCOUNT_ID>",
+    "service": "EKS",
+    "eventTypeCode": "AWS_EKS_ADDON_UPGRADE_AVAILABLE",
+    "eventTypeCategory": "scheduledChange",
+    "eventRegion": "ap-south-1",
+    "statusCode": "upcoming",
+    "startTime": "Mon, 15 Jun 2026 02:00:00 GMT",
+    "endTime": "Mon, 15 Jun 2026 04:00:00 GMT",
+    "lastUpdatedTime": "Thu, 11 Jun 2026 10:00:00 GMT",
+    "eventArn": "arn:aws:health:ap-south-1::event/EKS/test-event-dev",
+    "communicationId": "test-communication-dev-001",
+    "affectedEntities": [
+      {
+        "entityValue": "dev-eks-cluster/aws-ebs-csi-driver",
+        "status": "PENDING",
+        "lastUpdatedTime": "Thu, 11 Jun 2026 10:00:00 GMT"
+      }
+    ],
+    "eventDescription": [
+      {
+        "language": "en_US",
+        "latestDescription": "Amazon EKS managed add-on upgrade is available for aws-ebs-csi-driver in your dev EKS cluster."
+      }
+    ]
+  }
+}
+
+++++++
+
+aws lambda invoke \
+  --function-name dev-aws-health-email-alert \
+  --payload file://test-event.json \
+  --cli-binary-format raw-in-base64-out \
+  --region us-east-1 \
+  response.json
+
+
++++++++
+
+aws events put-events \
+  --entries '[
+    {
+      "Source": "aws.health",
+      "DetailType": "AWS Health Event",
+      "Detail": "{\"affectedAccount\":\"<DEV_ACCOUNT_ID>\",\"service\":\"EKS\",\"eventTypeCode\":\"AWS_EKS_ADDON_UPGRADE_AVAILABLE\",\"eventTypeCategory\":\"scheduledChange\",\"eventRegion\":\"ap-south-1\",\"statusCode\":\"upcoming\",\"startTime\":\"Mon, 15 Jun 2026 02:00:00 GMT\",\"endTime\":\"Mon, 15 Jun 2026 04:00:00 GMT\",\"lastUpdatedTime\":\"Thu, 11 Jun 2026 10:00:00 GMT\",\"eventArn\":\"arn:aws:health:ap-south-1::event/EKS/test-event-dev-eventbridge\",\"communicationId\":\"test-communication-dev-eventbridge-001\",\"affectedEntities\":[{\"entityValue\":\"dev-eks-cluster/aws-ebs-csi-driver\",\"status\":\"PENDING\",\"lastUpdatedTime\":\"Thu, 11 Jun 2026 10:00:00 GMT\"}],\"eventDescription\":[{\"language\":\"en_US\",\"latestDescription\":\"Amazon EKS managed add-on upgrade is available for aws-ebs-csi-driver in your dev EKS cluster.\"}]}"
+    }
+  ]' \
+  --region us-east-1
+
+aws logs tail /aws/lambda/dev-aws-health-email-alert \
+  --follow \
+  --region us-east-1
+
+aws events describe-rule \
+  --name dev-aws-health-events \
+  --region us-east-1
+
+aws events list-targets-by-rule \
+  --rule dev-aws-health-events \
+  --region us-east-1
+
+aws lambda get-policy \
+  --function-name dev-aws-health-email-alert \
+  --region us-east-1
+
