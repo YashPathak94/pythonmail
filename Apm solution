@@ -233,3 +233,19 @@ aws lambda get-policy \
   --function-name dev-aws-health-email-alert \
   --region us-east-1
 
+
+env:
+  - name: OTEL_PROPAGATORS
+    value: "xray"
+
+  - name: OTEL_INSTRUMENTATION_AWS_SDK_ENABLED
+    value: "false"
+
+  - name: OTEL_INSTRUMENTATION_APACHE_HTTPCLIENT_ENABLED
+    value: "false"
+
+  - name: OTEL_INSTRUMENTATION_HTTP_URL_CONNECTION_ENABLED
+    value: "false"
+
+  - name: OTEL_INSTRUMENTATION_JAVA_HTTP_CLIENT_ENABLED
+    value: "false"
