@@ -1,0 +1,67 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sampleargo-deva
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://codeconnections.us-east-1.amazonaws.com/git-http/440179238055/us-east-1/969ad1f0-ea28-4624-86fd-736962d07136/yashraj-pathak/sampleargo.git
+    targetRevision: main
+
+    # Replace this with the actual directory in Git.
+    # Use "." only when manifests are at repository root.
+    path: kubernetes/manifests
+
+  destination:
+    name: ven-eks-idev
+    namespace: deva
+
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sampleargo-devb
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://codeconnections.us-east-1.amazonaws.com/git-http/440179238055/us-east-1/969ad1f0-ea28-4624-86fd-736962d07136/yashraj-pathak/sampleargo.git
+    targetRevision: main
+    path: kubernetes/manifests
+
+  destination:
+    name: ven-eks-idev
+    namespace: devb
+
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: sampleargo-devc
+  namespace: argocd
+spec:
+  project: default
+
+  source:
+    repoURL: https://codeconnections.us-east-1.amazonaws.com/git-http/440179238055/us-east-1/969ad1f0-ea28-4624-86fd-736962d07136/yashraj-pathak/sampleargo.git
+    targetRevision: main
+    path: kubernetes/manifests
+
+  destination:
+    name: ven-eks-idev
+    namespace: devc
+
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
