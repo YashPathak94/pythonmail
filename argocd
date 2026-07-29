@@ -1,0 +1,49 @@
+export ARGOCD_CAPABILITY_NAME="<capability-name-from-output>"
+
+export CAPABILITY_ROLE_ARN=$(
+  aws eks describe-capability \
+    --region us-east-1 \
+    --cluster-name ven-eks-idev \
+    --capability-name "$ARGOCD_CAPABILITY_NAME" \
+    --query 'capability.roleArn' \
+    --output text
+)
+
+echo "$CAPABILITY_ROLE_ARN"
+
+
+cat > argocd-codeconnections-policy.json <<'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "UseGitHubEnterpriseConnection",
+      "Effect": "Allow",
+      "Action": [
+        "codeconnections:GetConnection",
+        "codeconnections:UseConnection"
+      ],
+      "Resource": "arn:aws:codeconnections:us-east-1:440179238055:connection/969ad1f0-ea28-4624-86fd-736962d07136"
+    }
+  ]
+}
+EOF
+
+
+export CAPABILITY_ROLE_NAME="${CAPABILITY_ROLE_ARN##*/}"
+
+aws iam put-role-policy \
+  --role-name "$CAPABILITY_ROLE_NAME" \
+  --policy-name ArgoCDUseGitHubEnterpriseConnection \
+  --policy-document file://argocd-codeconnections-policy.json
+
+
+aws iam get-role-policy \
+  --role-name "$CAPABILITY_ROLE_NAME" \
+  --policy-name ArgoCDUseGitHubEnterpriseConnection
+
+aws codeconnections get-connection \
+  --region us-east-1 \
+  --connection-arn arn:aws:codeconnections:us-east-1:440179238055:connection/969ad1f0-ea28-4624-86fd-736962d07136 \
+  --query 'Connection.{Status:ConnectionStatus,Provider:ProviderType,HostArn:HostArn}'
+
