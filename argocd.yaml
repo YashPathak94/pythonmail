@@ -65,3 +65,95 @@ spec:
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
+
+
+
+
++++++++++++++++++++++++
+
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: idev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: idevb
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: idevc
+---
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: sample-argo-project
+  namespace: argocd
+spec:
+  description: POC project for the AWS sample assets application
+
+  # Required for custom projects with EKS managed Argo CD.
+  sourceNamespaces:
+    - argocd
+
+  sourceRepos:
+    - https://github.com/aws-samples/argocd-on-amazon-eks-workshop.git
+
+  destinations:
+    - name: ven-eks-idev
+      namespace: idev
+    - name: ven-eks-idev
+      namespace: idevb
+    - name: ven-eks-idev
+      namespace: idevc
+
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"
+
+  clusterResourceWhitelist:
+    - group: ""
+      kind: Namespace
+---
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: sample-assets
+  namespace: argocd
+spec:
+  generators:
+    - list:
+        elements:
+          - namespace: idev
+          - namespace: idevb
+          - namespace: idevc
+
+  template:
+    metadata:
+      name: "sample-assets-{{namespace}}"
+      labels:
+        app.kubernetes.io/part-of: sample-assets-poc
+        target-namespace: "{{namespace}}"
+
+    spec:
+      project: sample-argo-project
+
+      source:
+        repoURL: https://github.com/aws-samples/argocd-on-amazon-eks-workshop.git
+        targetRevision: main
+        path: gitops/apps/frontend/assets/base
+
+      destination:
+        name: ven-eks-idev
+        namespace: "{{namespace}}"
+
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
+          - ServerSideApply=true
