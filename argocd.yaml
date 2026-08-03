@@ -157,3 +157,145 @@ spec:
         syncOptions:
           - CreateNamespace=true
           - ServerSideApply=true
+
+
+
+++++++++++++++++++
+
+# Sample workload manifest for Amazon EKS managed Argo CD
+#
+# Commit this file to a Git repository, for example:
+#   apps/sample-assets/manifest.yaml
+#
+# Do not set metadata.namespace on these resources. Argo CD will apply the
+# destination namespace configured by each generated Application, allowing the
+# same manifest to deploy into idev, idevb, and idevc.
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: assets
+  labels:
+    app.kubernetes.io/name: assets
+    app.kubernetes.io/instance: assets
+    app.kubernetes.io/component: service
+    app.kubernetes.io/part-of: sample-assets
+    app.kubernetes.io/created-by: eks-workshop
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: assets
+  labels:
+    app.kubernetes.io/name: assets
+    app.kubernetes.io/instance: assets
+    app.kubernetes.io/component: configuration
+    app.kubernetes.io/part-of: sample-assets
+    app.kubernetes.io/created-by: eks-workshop
+data:
+  PORT: "8080"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: assets
+  labels:
+    app.kubernetes.io/name: assets
+    app.kubernetes.io/instance: assets
+    app.kubernetes.io/component: service
+    app.kubernetes.io/part-of: sample-assets
+    app.kubernetes.io/created-by: eks-workshop
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: assets
+    app.kubernetes.io/instance: assets
+    app.kubernetes.io/component: service
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: assets
+  labels:
+    app.kubernetes.io/name: assets
+    app.kubernetes.io/instance: assets
+    app.kubernetes.io/component: service
+    app.kubernetes.io/part-of: sample-assets
+    app.kubernetes.io/created-by: eks-workshop
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: assets
+      app.kubernetes.io/instance: assets
+      app.kubernetes.io/component: service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: assets
+        app.kubernetes.io/instance: assets
+        app.kubernetes.io/component: service
+        app.kubernetes.io/part-of: sample-assets
+        app.kubernetes.io/created-by: eks-workshop
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: assets
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: assets
+          image: public.ecr.aws/aws-containers/retail-store-sample-assets:0.4.0
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: assets
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          readinessProbe:
+            httpGet:
+              path: /health.html
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 6
+          livenessProbe:
+            httpGet:
+              path: /health.html
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 128m
+              memory: 128Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: false
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+      volumes:
+        - name: tmp-volume
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
