@@ -299,3 +299,308 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 64Mi
+
+
+
+++++++++++++++++++++++++++++
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: annuity-admin-dev
+  labels:
+    application-group: annuity-admin
+    environment: dev
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: annuity-admin-devb
+  labels:
+    application-group: annuity-admin
+    environment: devb
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: annuity-admin-devc
+  labels:
+    application-group: annuity-admin
+    environment: devc
+
+++++++++++++++
+
+{{/*
+Application resource name.
+
+ApplicationSet supplies fullnameOverride:
+  annuity-agent-api-dev
+  annuity-agent-api-devb
+  annuity-agent-api-devc
+*/}}
+{{- define "annuity-services.fullname" -}}
+{{- if .Values.fullnameOverride }}
+{{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
+{{- else }}
+{{- .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- end }}
+{{- end }}
+
+{{- define "annuity-services.labels" -}}
+app.kubernetes.io/name: {{ .Values.applicationName | quote }}
+app.kubernetes.io/instance: {{ .Release.Name | quote }}
+app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+app.kubernetes.io/part-of: annuity-admin
+environment: {{ .Values.environment | quote }}
+helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+{{- end }}
+
+{{- define "annuity-services.selectorLabels" -}}
+app.kubernetes.io/name: {{ .Values.applicationName | quote }}
+app.kubernetes.io/instance: {{ .Release.Name | quote }}
+{{- end }}
+
+
+
++++++++++++++
+
+replicaCount: 1
+
+image:
+  repository: ""
+  tag: ""
+  pullPolicy: IfNotPresent
+
+applicationName: ""
+environment: ""
+fullnameOverride: ""
+
+containerPort: 8443
+
+service:
+  type: ClusterIP
+  port: 443
+  targetPort: 8443
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 100Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+nodeSelector:
+  workload-type: tomcat
+
+configMap: {}
+
+
++++++++++++++++++++
+
+applicationName: annuity-agent-api
+
+image:
+  repository: 929898559204.dkr.ecr.us-east-1.amazonaws.com/annuity-agent-api
+
+containerPort: 8443
+
+service:
+  port: 443
+  targetPort: 8443
+
+configMap:
+  CMB_NAME: Annuity_Services
+  JPA_REQUESTS: "100"
+
+
+
++++++++++++++++
+
+applicationName: annuity-contract-entity-api
+
+image:
+  repository: 929898559204.dkr.ecr.us-east-1.amazonaws.com/annuity-contract-entity-api
+
+containerPort: 8443
+
+service:
+  port: 443
+  targetPort: 8443
+
+configMap:
+  CMB_NAME: Annuity_Services
+  JPA_REQUESTS: "100"
+
+
+++++++++++++++++
+
+environment: dev
+replicaCount: 2
+
+++++++++++
+
+environment: devb
+replicaCount: 1
+
+++++++++++image:
+  tag: "1543"
+
+image:
+  tag: "1543"
+
+
++++++++++++
+
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: annuity-admin-services
+  namespace: argocd
+
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+
+  # Helpful while migrating. Deleting the ApplicationSet will not
+  # automatically delete all deployed resources.
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+
+  generators:
+    - matrix:
+        generators:
+
+          # Services
+          - list:
+              elements:
+                - service: annuity-agent-api
+                  valuesFile: annuity-agent-api.yaml
+
+                - service: annuity-contract-entity-api
+                  valuesFile: annuity-contract-entity-api.yaml
+
+                - service: annuity-contract-financial-api
+                  valuesFile: annuity-contract-financial-api.yaml
+
+                - service: annuity-utility-services
+                  valuesFile: annuity-utility-services.yaml
+
+          # Environments and destination namespaces
+          - list:
+              elements:
+                - environment: dev
+                  namespace: annuity-admin-dev
+
+                - environment: devb
+                  namespace: annuity-admin-devb
+
+                - environment: devc
+                  namespace: annuity-admin-devc
+
+  template:
+    metadata:
+      name: '{{ .service }}-{{ .environment }}'
+
+      labels:
+        application: '{{ .service }}'
+        application-group: annuity-admin
+        environment: '{{ .environment }}'
+
+    spec:
+      project: annuity-admin
+
+      source:
+        repoURL: >-
+          https://codeconnections.us-east-1.amazonaws.com/git-http/440179238055/us-east-1/969ad1f0-ea28-4624-86fd-736962d07136/EKS/ven-helm-charts.git
+
+        targetRevision: master
+        path: annuity-services
+
+        helm:
+          # Keep Application name and Helm release name identical.
+          releaseName: '{{ .service }}-{{ .environment }}'
+
+          valueFiles:
+            - values/common.yaml
+            - 'values/applications/{{ .valuesFile }}'
+            - 'values/environments/{{ .environment }}.yaml'
+            - 'values/overrides/{{ .environment }}/{{ .valuesFile }}'
+
+          parameters:
+            - name: applicationName
+              value: '{{ .service }}'
+
+            - name: environment
+              value: '{{ .environment }}'
+
+            - name: fullnameOverride
+              value: '{{ .service }}-{{ .environment }}'
+
+      destination:
+        server: arn:aws:eks:us-east-1:440179238055:cluster/ven-eks-idev
+        namespace: '{{ .namespace }}'
+
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+
+        syncOptions:
+          - ApplyOutOfSyncOnly=true
+          - PruneLast=true
+
+++++++++++++++++++++++
+
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: annuity-admin
+  namespace: argocd
+
+spec:
+  description: Annuity applications managed by EKS Argo CD capability
+
+  # Required by the EKS managed Argo CD capability.
+  sourceNamespaces:
+    - argocd
+
+  sourceRepos:
+    - >-
+      https://codeconnections.us-east-1.amazonaws.com/git-http/440179238055/us-east-1/969ad1f0-ea28-4624-86fd-736962d07136/EKS/ven-helm-charts.git
+
+  destinations:
+    - server: arn:aws:eks:us-east-1:440179238055:cluster/ven-eks-idev
+      namespace: annuity-admin-dev
+
+    - server: arn:aws:eks:us-east-1:440179238055:cluster/ven-eks-idev
+      namespace: annuity-admin-devb
+
+    - server: arn:aws:eks:us-east-1:440179238055:cluster/ven-eks-idev
+      namespace: annuity-admin-devc
+
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: Secret
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: apps
+      kind: Deployment
+    - group: apps
+      kind: StatefulSet
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: networking.k8s.io
+      kind: Ingress
+    - group: policy
+      kind: PodDisruptionBudget
+
+  ++++++++++++++++++++
+  
