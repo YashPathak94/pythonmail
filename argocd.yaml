@@ -603,4 +603,779 @@ spec:
       kind: PodDisruptionBudget
 
   ++++++++++++++++++++
-  
+  ++++++++++++++++++++++++++++++++++++++++++++++++++
+
+  apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: portal-services
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions:
+    - missingkey=error
+
+  syncPolicy:
+    preserveResourcesOnDeletion: true
+
+  generators:
+    - matrix:
+        generators:
+          - git:
+              repoURL: https://codeconnections.us-east-1.amazonaws.com/git-http/440179238055/us-east-1/969ad1f0-ea28-4624-86fd-736962d07136/EKS/ven-helm-charts.git
+              revision: dev
+              files:
+                - path: portal-services/catalog/services/*.yaml
+
+          - list:
+              elements:
+                - environment: dev
+                  namespace: portal-services-dev
+                - environment: devb
+                  namespace: portal-services-devb
+                - environment: devc
+                  namespace: portal-services-devc
+
+  template:
+    metadata:
+      name: '{{ .serviceName }}-{{ .environment }}'
+      labels:
+        application-group: portal-services
+        service: '{{ .serviceName }}'
+        environment: '{{ .environment }}'
+
+    spec:
+      project: portal-services
+
+      source:
+        repoURL: https://codeconnections.us-east-1.amazonaws.com/git-http/440179238055/us-east-1/969ad1f0-ea28-4624-86fd-736962d07136/EKS/ven-helm-charts.git
+        targetRevision: dev
+        path: portal-services
+
+        helm:
+          releaseName: '{{ .serviceName }}-{{ .environment }}'
+          ignoreMissingValueFiles: true
+
+          valueFiles:
+            - values/common.yaml
+            - 'values/services/{{ .valuesFile }}'
+            - 'values/environments/{{ .environment }}.yaml'
+            - 'values/overrides/{{ .environment }}/{{ .valuesFile }}'
+
+          parameters:
+            - name: app.name
+              value: '{{ .serviceName }}'
+            - name: environment
+              value: '{{ .environment }}'
+            - name: fullnameOverride
+              value: '{{ .serviceName }}-{{ .environment }}'
+
+      destination:
+        server: arn:aws:eks:us-east-1:440179238055:cluster/ven-eks-idev
+        namespace: '{{ .namespace }}'
+
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=false
+          - ApplyOutOfSyncOnly=true
+          - PruneLast=true
+          
++++++++++++++++++++++++++++++++++++++
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: portal-services-dev
+  labels:
+    application-group: portal-services
+    environment: dev
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: portal-services-devb
+  labels:
+    application-group: portal-services
+    environment: devb
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: portal-services-devc
+  labels:
+    application-group: portal-services
+    environment: devc
+    
++++++++++++++++++++++++++++++++
+
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: portal-services
+  namespace: argocd
+spec:
+  description: Portal microservices deployed by the EKS managed Argo CD capability
+
+  sourceNamespaces:
+    - argocd
+
+  sourceRepos:
+    - https://codeconnections.us-east-1.amazonaws.com/git-http/440179238055/us-east-1/969ad1f0-ea28-4624-86fd-736962d07136/EKS/ven-helm-charts.git
+
+  destinations:
+    - server: arn:aws:eks:us-east-1:440179238055:cluster/ven-eks-idev
+      namespace: portal-services-dev
+    - server: arn:aws:eks:us-east-1:440179238055:cluster/ven-eks-idev
+      namespace: portal-services-devb
+    - server: arn:aws:eks:us-east-1:440179238055:cluster/ven-eks-idev
+      namespace: portal-services-devc
+
+  namespaceResourceWhitelist:
+    - group: ""
+      kind: ConfigMap
+    - group: ""
+      kind: PersistentVolumeClaim
+    - group: ""
+      kind: Service
+    - group: ""
+      kind: ServiceAccount
+    - group: apps
+      kind: Deployment
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: networking.k8s.io
+      kind: Ingress
+    - group: policy
+      kind: PodDisruptionBudget
+      
+++++++++++++++++++++++++++++++++++
+
+# StorageClass is cluster-scoped. Manage it once from a platform repository or
+# dedicated platform Application, never from every service Application.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-portal-sc-dev
+provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap
+  fileSystemId: REPLACE_DEV_EFS_FILE_SYSTEM_ID
+  directoryPerms: "0777"
+  uid: "185"
+  gid: "0"
+  basePath: "/shared"
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-portal-sc-devb
+provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap
+  fileSystemId: REPLACE_DEVB_EFS_FILE_SYSTEM_ID
+  directoryPerms: "0777"
+  uid: "185"
+  gid: "0"
+  basePath: "/shared"
+---
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: efs-portal-sc-devc
+provisioner: efs.csi.aws.com
+parameters:
+  provisioningMode: efs-ap
+  fileSystemId: REPLACE_DEVC_EFS_FILE_SYSTEM_ID
+  directoryPerms: "0777"
+  uid: "185"
+  gid: "0"
+  basePath: "/shared"
+
+++++++++++++++++++++++++++++++++++++
+
+serviceName: email-services
+valuesFile: email-services.yaml
+
++++++++++++++++++++++++++++++++++++
+
+# Replace this starter with the complete current Catalina properties file.
+# The Helm `tpl` function renders values used in this file.
+common.loader="${catalina.base}/lib","${catalina.base}/lib/*.jar","${catalina.home}/lib","${catalina.home}/lib/*.jar"
+tomcat.util.scan.StandardJarScanFilter.jarsToSkip=\
+annotations-api.jar,\
+ant-junit.jar,\
+catalina-ant.jar,\
+catalina-ha.jar,\
+catalina-storeconfig.jar,\
+catalina-tribes.jar,\
+catalina.jar,\
+commons-*.jar,\
+tomcat-*.jar
+spring.profiles.active={{ .Values.runtime.activeProfile }}
+
+
++++++++++++++++++++++++++++++++++++++
+
+{{- define "portal-service.fullname" -}}
+{{- required "fullnameOverride is required" .Values.fullnameOverride | trunc 63 | trimSuffix "-" -}}
+{{- end }}
+
+{{- define "portal-service.selectorLabels" -}}
+app.kubernetes.io/name: {{ required "app.name is required" .Values.app.name | quote }}
+app.kubernetes.io/instance: {{ .Release.Name | quote }}
+{{- end }}
+
+{{- define "portal-service.labels" -}}
+{{ include "portal-service.selectorLabels" . }}
+app.kubernetes.io/managed-by: {{ .Release.Service | quote }}
+app.kubernetes.io/part-of: "portal-services"
+app.kubernetes.io/version: {{ .Values.image.tag | quote }}
+environment: {{ .Values.environment | quote }}
+helm.sh/chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+{{- end }}
+
+++++++++++++++++++++++++++++++++++
+
+{{- if .Values.catalina.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "portal-service.fullname" . }}-catalina
+  labels:
+    {{- include "portal-service.labels" . | nindent 4 }}
+data:
+  catalina.properties: |
+{{ tpl (.Files.Get "files/catalina.properties") . | nindent 4 }}
+{{- end }}
+
++++++++++++++++++++++++++++++++++
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "portal-service.fullname" . }}
+  labels:
+    {{- include "portal-service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "portal-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      annotations:
+        {{- toYaml .Values.podAnnotations | nindent 8 }}
+        prometheus.io/path: "/{{ .Values.app.name }}/actuator/prometheus"
+      labels:
+        {{- include "portal-service.labels" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "portal-service.fullname" . }}
+      {{- with .Values.topologySpreadConstraints }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: {{ include "portal-service.fullname" . }}
+          image: "{{ required "image.repository is required" .Values.image.repository }}:{{ required "image.tag is required" .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: https
+              containerPort: {{ .Values.container.port }}
+              protocol: TCP
+          env:
+            - name: JAVA_OPTIONS
+              value: {{ .Values.runtime.javaOptions | quote }}
+            - name: JAVA_OPTS
+              value: "{{ .Values.runtime.javaOpts }} -Daws.region={{ .Values.runtime.region }}"
+            - name: OTEL_PROPAGATORS
+              value: {{ .Values.runtime.otelPropagators | quote }}
+            - name: SPRING_PROFILES_ACTIVE
+              value: {{ .Values.runtime.activeProfile | quote }}
+          {{- if .Values.probes.liveness.enabled }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.probes.liveness.path }}
+              port: {{ .Values.container.port }}
+              scheme: HTTPS
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}
+            successThreshold: {{ .Values.probes.liveness.successThreshold }}
+            timeoutSeconds: {{ .Values.probes.liveness.timeoutSeconds }}
+          {{- end }}
+          {{- if .Values.probes.readiness.enabled }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.probes.readiness.path }}
+              port: {{ .Values.container.port }}
+              scheme: HTTPS
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+            successThreshold: {{ .Values.probes.readiness.successThreshold }}
+            timeoutSeconds: {{ .Values.probes.readiness.timeoutSeconds }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            {{- if .Values.catalina.enabled }}
+            - name: catalina
+              mountPath: {{ .Values.catalina.mountPath }}
+              subPath: catalina.properties
+            {{- end }}
+            {{- if .Values.secretMounts.chaincert.enabled }}
+            - name: chaincert
+              mountPath: {{ .Values.secretMounts.chaincert.mountPath }}
+              subPath: {{ .Values.secretMounts.chaincert.subPath }}
+              readOnly: true
+            {{- end }}
+            {{- if .Values.secretMounts.serverXml.enabled }}
+            - name: serverxml
+              mountPath: {{ .Values.secretMounts.serverXml.mountPath }}
+              subPath: {{ .Values.secretMounts.serverXml.subPath }}
+              readOnly: true
+            {{- end }}
+            {{- if .Values.persistence.enabled }}
+            {{- range .Values.persistence.claims }}
+            - name: {{ .name }}
+              mountPath: {{ .mountPath }}
+            {{- end }}
+            {{- end }}
+      volumes:
+        {{- if .Values.catalina.enabled }}
+        - name: catalina
+          configMap:
+            name: {{ include "portal-service.fullname" . }}-catalina
+            items:
+              - key: catalina.properties
+                path: catalina.properties
+        {{- end }}
+        {{- if .Values.secretMounts.chaincert.enabled }}
+        - name: chaincert
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ required "chaincert secretProviderClass is required" .Values.secretMounts.chaincert.secretProviderClass | quote }}
+        {{- end }}
+        {{- if .Values.secretMounts.serverXml.enabled }}
+        - name: serverxml
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: {{ required "serverXml secretProviderClass is required" .Values.secretMounts.serverXml.secretProviderClass | quote }}
+        {{- end }}
+        {{- if .Values.persistence.enabled }}
+        {{- range .Values.persistence.claims }}
+        - name: {{ .name }}
+          persistentVolumeClaim:
+            claimName: {{ include "portal-service.fullname" $ }}-{{ .name }}
+        {{- end }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+
++++++++++++++++++++++++++++++++++++
+
+{{- if .Values.routing.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "portal-service.fullname" . }}
+  labels:
+    {{- include "portal-service.labels" . | nindent 4 }}
+  {{- with .Values.routing.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.routing.className }}
+  ingressClassName: {{ .Values.routing.className }}
+  {{- end }}
+  rules:
+    {{- if .Values.routing.host }}
+    - host: {{ .Values.routing.host | quote }}
+      http:
+    {{- else }}
+    - http:
+    {{- end }}
+        paths:
+          - path: "/{{ trimPrefix "/" (required "routing.lbPath is required" .Values.routing.lbPath) }}"
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "portal-service.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- end }}
+
+
+++++++++++++++++++++++++
+
+{{- if .Values.persistence.enabled }}
+{{- range $index, $claim := .Values.persistence.claims }}
+{{- if gt $index 0 }}
+---
+{{- end }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "portal-service.fullname" $ }}-{{ $claim.name }}
+  labels:
+    {{- include "portal-service.labels" $ | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: {{ required "persistence.storageClassName is required" $.Values.persistence.storageClassName }}
+  resources:
+    requests:
+      storage: {{ $claim.size }}
+{{- end }}
+{{- end }}
+
++++++++++++++++++++++++++++++
+
+{{- if .Values.service.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "portal-service.fullname" . }}
+  labels:
+    {{- include "portal-service.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "portal-service.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: https
+      port: {{ .Values.service.port }}
+      targetPort: {{ .Values.service.targetPort }}
+      protocol: TCP
+{{- end }}
+
++++++++++++++++++++++++++++
+
+{{- if .Values.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "portal-service.fullname" . }}
+  labels:
+    {{- include "portal-service.labels" . | nindent 4 }}
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+
+
+++++++++++++++++++++++++++++++++++
+
+environment: dev
+replicaCount: 1
+
+runtime:
+  activeProfile: dev
+  region: us-east-1
+
+secretMounts:
+  chaincert:
+    enabled: true
+    secretProviderClass: bas-chaincert-portal-services-dev
+
+persistence:
+  storageClassName: efs-portal-sc-dev
+
+routing:
+  annotations:
+    alb.ingress.kubernetes.io/group.name: portal-services-dev
+    
++++++++++++++++++++++++++++++++
+
+image:
+  # Jenkins replaces this after the image build.
+  tag: "REPLACE_WITH_IMAGE_TAG"
+
+secretMounts:
+  serverXml:
+    enabled: true
+    secretProviderClass: bas-params-rhel9-62
+
+++++++++++++++++++++++++++++
+
+app:
+  name: email-services
+
+image:
+  repository: 929898559204.dkr.ecr.us-east-1.amazonaws.com/email-services
+
+routing:
+  lbPath: email-services
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 1000Mi
+  limits:
+    cpu: 500m
+    memory: 1000Mi
+
++++++++++++++++++++++++++++++
+
+image:
+  pullPolicy: Always
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 443
+  targetPort: 8443
+
+container:
+  port: 8443
+
+nodeSelector:
+  role: tomcat
+
+secretMounts:
+  chaincert:
+    enabled: true
+
+routing:
+  enabled: true
+  className: alb
+  annotations:
+    alb.ingress.kubernetes.io/scheme: internal
+    alb.ingress.kubernetes.io/target-type: ip
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 100Mi
+  limits:
+    cpu: 500m
+    memory: 1024Mi
+    
+++++++++++++++++++++++++++++++
+
+apiVersion: v2
+name: portal-service
+description: Reusable portal microservice chart for Argo CD
+type: application
+version: 1.0.0
+appVersion: "1.0"
+
++++++++++++++++++++
+
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["app", "environment", "image"],
+  "properties": {
+    "app": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {"name": {"type": "string", "minLength": 1}}
+    },
+    "environment": {
+      "type": "string",
+      "enum": ["dev", "devb", "devc"]
+    },
+    "image": {
+      "type": "object",
+      "required": ["repository", "tag"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "tag": {"type": "string", "minLength": 1},
+        "pullPolicy": {"type": "string"}
+      }
+    }
+  }
+}
+
++++++++++++++++++++++++++++
+
+app:
+  name: ""
+
+environment: ""
+fullnameOverride: ""
+replicaCount: 1
+
+image:
+  repository: ""
+  tag: ""
+  pullPolicy: Always
+
+container:
+  port: 8443
+
+serviceAccount:
+  create: true
+  annotations: {}
+
+service:
+  enabled: true
+  type: ClusterIP
+  port: 443
+  targetPort: 8443
+
+routing:
+  enabled: false
+  className: ""
+  host: ""
+  lbPath: ""
+  annotations: {}
+
+runtime:
+  activeProfile: ""
+  javaOptions: "-Xms128m -Xmx1024m"
+  javaOpts: "-Duser.timezone=America/New_York"
+  otelPropagators: "tracecontext,xray"
+  region: "us-east-1"
+
+probes:
+  liveness:
+    enabled: true
+    path: /
+    initialDelaySeconds: 45
+    periodSeconds: 10
+    failureThreshold: 4
+    successThreshold: 1
+    timeoutSeconds: 1
+  readiness:
+    enabled: true
+    path: /
+    initialDelaySeconds: 45
+    periodSeconds: 10
+    failureThreshold: 4
+    successThreshold: 1
+    timeoutSeconds: 1
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 100Mi
+  limits:
+    cpu: 500m
+    memory: 1024Mi
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+
+catalina:
+  enabled: true
+  mountPath: /opt/jws-6.2/tomcat/conf/catalina.properties
+
+secretMounts:
+  chaincert:
+    enabled: false
+    secretProviderClass: ""
+    mountPath: /opt/jws/tomcat/ssl/cert.p12
+    subPath: cert.p12
+  serverXml:
+    enabled: false
+    secretProviderClass: ""
+    mountPath: /opt/jws-6.2/tomcat/conf/server.xml
+    subPath: server.xml
+
+persistence:
+  enabled: false
+  storageClassName: ""
+  claims: []
+
+podAnnotations:
+  instrumentation.opentelemetry.io/inject-java: "true"
+  prometheus.io/port: "9443"
+  prometheus.io/scheme: "https"
+  prometheus.io/scrape: "true"
+
+podLabels: {}
+
+
++++++++++++++++++++++++
+
+# Portal Services: Helm + EKS Managed Argo CD
+
+This starter restructures the existing `portal-services` chart so that:
+
+- namespaces are `portal-services-dev`, `portal-services-devb`, and `portal-services-devc`;
+- every service/environment combination is a separate Argo CD Application;
+- Kubernetes objects follow `<service>-<environment>`;
+- route paths stay service-specific, for example `email-services`;
+- shared cluster resources are not owned by every application;
+- Jenkins builds images and updates Git; Argo CD performs deployment.
+
+For `email-services` in `dev`:
+
+- Argo CD Application: `email-services-dev`
+- Helm release: `email-services-dev`
+- Namespace: `portal-services-dev`
+- Deployment and Service: `email-services-dev`
+- ConfigMap: `email-services-dev-catalina`
+- Pod: `email-services-dev-<replicaset-hash>-<pod-id>`
+- Route path: `/email-services`
+
+## Validate one service
+
+```bash
+helm lint portal-services \
+  -f portal-services/values/common.yaml \
+  -f portal-services/values/services/email-services.yaml \
+  -f portal-services/values/environments/dev.yaml \
+  -f portal-services/values/overrides/dev/email-services.yaml \
+  --set app.name=email-services \
+  --set environment=dev \
+  --set fullnameOverride=email-services-dev
+
+helm template email-services-dev portal-services \
+  --namespace portal-services-dev \
+  -f portal-services/values/common.yaml \
+  -f portal-services/values/services/email-services.yaml \
+  -f portal-services/values/environments/dev.yaml \
+  -f portal-services/values/overrides/dev/email-services.yaml \
+  --set app.name=email-services \
+  --set environment=dev \
+  --set fullnameOverride=email-services-dev
+```
+
+Before deployment:
+
+1. Replace `REPLACE_WITH_IMAGE_TAG`.
+2. Replace EFS file-system ID placeholders.
+3. Verify each `SecretProviderClass` name.
+4. Copy the complete current Catalina properties content into
+   `portal-services/files/catalina.properties`.
+5. Confirm the `dev` Git revision in the ApplicationSet matches your branch.
+
+Apply:
+
+```bash
+kubectl apply -f argocd/portal-services-namespaces.yaml
+kubectl apply -f argocd/portal-services-project.yaml
+kubectl apply -f argocd/portal-services-applicationset.yaml
+```
+
+Check generated applications:
+
+```bash
+kubectl get applications -n argocd \
+  -l argocd.argoproj.io/application-set-name=portal-services
+```
+
