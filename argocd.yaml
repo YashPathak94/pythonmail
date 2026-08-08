@@ -1379,3 +1379,156 @@ kubectl get applications -n argocd \
   -l argocd.argoproj.io/application-set-name=portal-services
 ```
 
++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "environment",
+    "replicaCount",
+    "nodeSelector",
+    "namespace",
+    "microservice_name",
+    "containerPort",
+    "listenerPort",
+    "containerRegistry",
+    "tag",
+    "cmdb_name",
+    "region",
+    "rhel_version"
+  ],
+  "properties": {
+    "environment": {
+      "type": "string"
+    },
+    "replicaCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "nodeSelector": {
+      "type": "string",
+      "minLength": 1
+    },
+    "namespace": {
+      "type": "string",
+      "minLength": 1
+    },
+    "microservice_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "containerPort": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "listenerPort": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535
+    },
+    "containerRegistry": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tag": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cmdb_name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "region": {
+      "type": "string",
+      "minLength": 1
+    },
+    "active_profile": {
+      "type": "string"
+    },
+    "rhel_version": {
+      "type": "string"
+    },
+    "hpa_requests": {
+      "type": "object"
+    },
+    "hpa_limits": {
+      "type": "object"
+    }
+  }
+}
+
+
+++++++++++++++++++++++++++++++
+
+pipeline {
+  agent any
+
+  parameters {
+    choice(
+      name: 'SERVICE',
+      choices: [
+        'profile-services',
+        'portal-claims-api',
+        'email-services',
+        'document-engine',
+        'sharepoint-services',
+        'audit-services',
+        'portal-adminmodule-api',
+        'portal-lobreport-services',
+        'portal-customer-api',
+        'portal-professional-api',
+        'portal-userprofile-api',
+        'portal-commission-services',
+        'portal-csr-api'
+      ],
+      description: 'Service whose image was built'
+    )
+    choice(
+      name: 'ENVIRONMENT',
+      choices: ['dev', 'devb', 'devc'],
+      description: 'GitOps target environment'
+    )
+    string(
+      name: 'IMAGE_TAG',
+      defaultValue: '',
+      description: 'Immutable ECR image tag or digest'
+    )
+  }
+
+  stages {
+    stage('Validate') {
+      steps {
+        sh '''
+          set -euo pipefail
+          test -n "${IMAGE_TAG}"
+          test -f "portal-services/catalog/services/${SERVICE}.yaml"
+          test -f "portal-services/values/overrides/${ENVIRONMENT}/${SERVICE}.yaml"
+        '''
+      }
+    }
+
+    stage('Update desired state') {
+      steps {
+        sh '''
+          set -euo pipefail
+
+          FILE="portal-services/values/overrides/${ENVIRONMENT}/${SERVICE}.yaml"
+          export IMAGE_TAG
+          yq -i '.image.tag = strenv(IMAGE_TAG)' "${FILE}"
+
+          git checkout -b "deploy/${SERVICE}-${ENVIRONMENT}-${IMAGE_TAG}"
+          git add "${FILE}"
+          git commit -m "Deploy ${SERVICE}:${IMAGE_TAG} to ${ENVIRONMENT}"
+          git push origin HEAD
+
+          echo "Create a pull request for the branch."
+          echo "After merge, only ${SERVICE}-${ENVIRONMENT} becomes OutOfSync."
+        '''
+      }
+    }
+  }
+}
+
+
