@@ -363,3 +363,44 @@ Throughout the year, I demonstrated the company’s core values by delivering wi
 
 Throughout the year, I consistently delivered results that exceeded expectations and created measurable business impact. I strengthened platform reliability, enhanced observability, improved security posture, delivered cost optimizations, and automated key processes. My work enabled operational stability, reduced risks, and improved customer experience across environments. I consistently demonstrated our Core Values through collaboration, technical leadership, proactive ownership, and high-quality execution.
 
+
+########
+########
+
+**1. Delivered Measurable Cloud Cost Savings through Observability Optimization**
+
+Spearheaded multiple observability cost-optimization initiatives, including implementing an alternative APM solution to reduce dependency on AppDynamics and associated licensing expenses.
+
+One of my key accomplishments was optimizing AWS CloudWatch telemetry ingestion by migrating from the legacy AWS EMF (awsemf) exporter to an OpenTelemetry (OTEL) exporter. This optimization reduced the associated CloudWatch telemetry cost from **$200 to $0 across four environments, achieving a 100% reduction in the affected cost component**, while preserving essential application monitoring capabilities.
+
+These initiatives directly contributed to cloud cost optimization, infrastructure efficiency, and long-term operational sustainability.
+
+**2. Strengthened Production Reliability and Proactive Observability**
+
+Designed and implemented automated email-based alerting for AWS Health events, improving visibility into infrastructure disruptions, maintenance notifications, and potential service risks.
+
+Enhanced JVM observability by implementing Java heap memory monitoring using Micrometer, enabling better memory utilization tracking and faster troubleshooting of application performance issues.
+
+Additionally, actively supported AWS EKS patching and upgrade cycles, contributing to platform security, reliability, and operational stability.
+
+**3. Advanced GitOps Automation and Deployment Efficiency**
+
+Demonstrated an end-to-end Argo CD GitOps deployment workflow for AWS EKS microservices, highlighting opportunities to automate application delivery, standardize deployment practices, minimize manual intervention, and improve deployment consistency.
+
+This initiative established a foundation for scalable, repeatable, and reliable Kubernetes application deployments.
+
+**Overall Impact:** Throughout the year, I delivered measurable infrastructure cost savings, strengthened application observability, improved operational reliability, and promoted automation-driven engineering practices that support the company's business and technology objectives.
+
+**1. Ownership and Accountability**
+
+Demonstrated strong ownership by proactively identifying operational challenges and implementing sustainable solutions. Took responsibility for improving infrastructure monitoring through AWS Health event alerting and Java JVM heap memory visibility. Actively contributed to EKS patching and upgrade activities, prioritizing platform stability, security, and operational readiness. Focused on identifying potential risks early rather than reacting only after incidents occurred.
+
+**2. Innovation and Continuous Improvement**
+
+Embraced innovation by evaluating and implementing cost-effective observability solutions. Contributed to reducing AppDynamics dependency through an alternative APM implementation and modernized the CloudWatch telemetry pipeline using OpenTelemetry. These initiatives demonstrated my commitment to challenging existing approaches, optimizing cloud expenditure, and delivering measurable business value without compromising essential observability capabilities.
+
+**3. Collaboration, Knowledge Sharing, and Customer Focus**
+
+Demonstrated a collaborative and continuous-learning mindset by showcasing end-to-end Argo CD deployment workflows and promoting GitOps-based automation for EKS microservices. Worked toward improving deployment consistency, operational efficiency, and maintainability. By strengthening monitoring, reducing operational overhead, and supporting infrastructure upgrades, I helped improve the reliability of the platforms that internal teams and customers depend on.
+
+**Overall:** Throughout the year, I consistently demonstrated accountability, technical innovation, collaboration, and a commitment to operational excellence, aligning my engineering contributions with business priorities and continuous improvement.
